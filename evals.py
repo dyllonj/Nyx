@@ -79,16 +79,13 @@ def run_offline_evals(conn: sqlite3.Connection) -> list[EvalResult]:
     import coach
 
     context = coach.build_data_context(conn)
+    row = conn.execute("SELECT COUNT(*) AS n FROM runs").fetchone()
+    total_runs = int(row["n"] or 0) if row else 0
     results = [
         EvalResult(
             eval_id="context_present",
             status=PASS if bool(context.strip()) else FAIL,
             summary="Coach data context builds successfully." if context.strip() else "Coach data context is empty.",
-        ),
-        EvalResult(
-            eval_id="context_compaction",
-            status=PASS if "Run History (most recent" in context else WARN,
-            summary="Prompt context uses a compact recent-run table." if "Run History (most recent" in context else "Prompt context is not obviously compacted.",
         ),
         EvalResult(
             eval_id="evidence_contract",
@@ -97,19 +94,46 @@ def run_offline_evals(conn: sqlite3.Connection) -> list[EvalResult]:
         ),
     ]
 
-    if _has_meta(conn, "current_vdot"):
-        results.append(EvalResult(
-            eval_id="vdot_context",
-            status=PASS if "Easy pace" in context and "Threshold pace" in context else FAIL,
-            summary="VDOT training paces are available in coach context." if "Easy pace" in context and "Threshold pace" in context else "VDOT context is missing training pace lines.",
+    if total_runs == 0:
+        results.insert(1, EvalResult(
+            eval_id="context_compaction",
+            status=WARN,
+            summary="Skipped: there is no run data yet, so prompt compaction cannot be evaluated meaningfully.",
+        ))
+    else:
+        results.insert(1, EvalResult(
+            eval_id="context_compaction",
+            status=PASS if "Run History (most recent" in context else WARN,
+            summary="Prompt context uses a compact recent-run table." if "Run History (most recent" in context else "Prompt context is not obviously compacted.",
         ))
 
+    if _has_meta(conn, "current_vdot"):
+        if total_runs == 0:
+            results.append(EvalResult(
+                eval_id="vdot_context",
+                status=WARN,
+                summary="Skipped: VDOT metadata exists, but there is no run history in the local DB.",
+            ))
+        else:
+            results.append(EvalResult(
+                eval_id="vdot_context",
+                status=PASS if "Easy pace" in context and "Threshold pace" in context else FAIL,
+                summary="VDOT training paces are available in coach context." if "Easy pace" in context and "Threshold pace" in context else "VDOT context is missing training pace lines.",
+            ))
+
     if _has_meta(conn, "hr_zones_json"):
-        results.append(EvalResult(
-            eval_id="hr_zone_context",
-            status=PASS if "Zone 2" in context and "Heart Rate Zones" in context else FAIL,
-            summary="HR zones are available in coach context." if "Zone 2" in context and "Heart Rate Zones" in context else "HR zones are missing from coach context.",
-        ))
+        if total_runs == 0:
+            results.append(EvalResult(
+                eval_id="hr_zone_context",
+                status=WARN,
+                summary="Skipped: HR zones exist, but there is no run history in the local DB.",
+            ))
+        else:
+            results.append(EvalResult(
+                eval_id="hr_zone_context",
+                status=PASS if "Zone 2" in context and "Heart Rate Zones" in context else FAIL,
+                summary="HR zones are available in coach context." if "Zone 2" in context and "Heart Rate Zones" in context else "HR zones are missing from coach context.",
+            ))
 
     return results
 

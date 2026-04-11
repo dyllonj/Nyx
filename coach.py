@@ -16,12 +16,14 @@ Commands during chat:
 """
 import datetime
 import sqlite3
+import sys
 
 import config
 import knowledge_base
 import onboarding
 import store
 import vdot_zones
+from errors import DependencyError, HarnessError, format_error
 
 # ─── Data context builder ────────────────────────────────────────────────────
 
@@ -256,7 +258,15 @@ def ask_coach_once(
     model: str = "claude-opus-4-6",
     max_tokens: int = 1200,
 ) -> str:
-    import anthropic
+    try:
+        import anthropic
+    except ImportError as e:
+        raise DependencyError(
+            "missing_anthropic_dependency",
+            "Coach responses require the `anthropic` package.",
+            hint="Run `pip install -r requirements.txt` to enable coach chat and evals.",
+            details=str(e),
+        ) from e
 
     client = anthropic.Anthropic()
     system_blocks = build_turn_system_blocks(build_base_system_blocks(conn), user_input)
@@ -273,7 +283,15 @@ def ask_coach_once(
 # ─── Conversation loop ────────────────────────────────────────────────────────
 
 def run_coach():
-    import anthropic
+    try:
+        import anthropic
+    except ImportError as e:
+        raise DependencyError(
+            "missing_anthropic_dependency",
+            "Coach chat requires the `anthropic` package.",
+            hint="Run `pip install -r requirements.txt` to enable coach chat.",
+            details=str(e),
+        ) from e
 
     conn = store.open_db()
 
@@ -376,4 +394,8 @@ def run_coach():
 
 
 if __name__ == "__main__":
-    run_coach()
+    try:
+        run_coach()
+    except HarnessError as e:
+        print(format_error(e), file=sys.stderr)
+        raise SystemExit(1)
