@@ -1,0 +1,7 @@
+.garmin_tokens/
+garmin_data.db
+rei_plot.png
+chroma_db/
+__pycache__/
+*.pyc
+.env

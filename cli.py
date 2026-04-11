@@ -1,0 +1,432 @@
+#!/usr/bin/env python3
+"""
+Garmin Run Efficiency Tracker
+
+Commands:
+  sync              Pull all running data and compute metrics
+  report [--n N]    Show recent runs with REI and trends
+  inspect <id>      Full REI breakdown for one activity
+  plot              Plot REI over time (requires matplotlib)
+  vdot              Show or recalculate VDOT estimate and HR zones
+"""
+import argparse
+
+import metrics
+import models
+import onboarding
+import store
+import vdot_zones
+
+
+# ─── sync ────────────────────────────────────────────────────────────────────
+
+def cmd_sync(args):
+    import auth
+    import fetch
+
+    client = auth.get_client()
+    conn = store.open_db()
+
+    # 1. Fetch all running activities from Garmin
+    activities = fetch.fetch_all_running_activities(client)
+    new_count = 0
+    for act in activities:
+        if not store.get_run(conn, act["activityId"]):
+            run = models.RunSummary.from_api_summary(act)
+            store.upsert_run(conn, run, detail_fetched=False)
+            new_count += 1
+
+    print(f"Stored {new_count} new runs ({len(activities)} total).")
+
+    # 2. Fetch details for any run that doesn't have them yet
+    pending = store.get_runs_without_details(conn)
+    if not pending:
+        print("All runs already have detailed metrics.")
+    else:
+        print(f"Fetching details for {len(pending)} runs (this may take a while)...")
+
+    import datetime
+    for i, activity_id in enumerate(pending, 1):
+        row = store.get_run(conn, activity_id)
+        run = models.RunSummary(
+            activity_id=row["activity_id"],
+            name=row["name"] or "",
+            start_time=datetime.datetime.fromisoformat(row["start_time"]),
+            duration_sec=row["duration_sec"] or 0,
+            distance_m=row["distance_m"] or 0,
+            calories=row["calories"] or 0,
+            avg_hr=row["avg_hr"],
+            max_hr=row["max_hr"],
+            avg_speed_ms=row["avg_speed_ms"],
+            pace_min_per_km=row["pace_min_per_km"],
+        )
+
+        print(f"  [{i}/{len(pending)}] {run.start_time.date()} — {run.name[:40]}", end="\r", flush=True)
+
+        try:
+            detail = fetch.fetch_activity_detail(client, activity_id)
+            parsed = fetch.parse_detail_metrics(detail)
+            metrics.apply_detail_metrics(run, parsed)
+
+            splits = fetch.fetch_activity_splits(client, activity_id)
+            metrics.apply_split_metrics(run, splits)
+            store.upsert_laps(conn, activity_id, splits.get("lapDTOs", []))
+        except Exception as e:
+            print(f"\n  Warning: could not fetch details for {activity_id}: {e}")
+
+        # Compute REI without AE baseline on first pass (baseline not computed yet)
+        ae_baseline_str = store.get_meta(conn, "ae_baseline")
+        ae_baseline = float(ae_baseline_str) if ae_baseline_str else None
+        metrics.compute_all(run, ae_baseline)
+
+        store.upsert_run(conn, run, detail_fetched=True)
+
+    print()
+
+    # 3. Compute AE baseline and recompute all REI scores
+    print("Computing aerobic efficiency baseline...")
+    ae_baseline = store.compute_and_store_ae_baseline(conn)
+    if ae_baseline:
+        updated = store.recompute_all_rei(conn, ae_baseline)
+        print(f"AE baseline: {ae_baseline:.4f}  ({updated} REI scores updated)")
+    else:
+        print("Not enough qualifying runs to compute AE baseline yet.")
+
+    print("Estimating VDOT from run data...")
+    current_vdot = _meta_float(conn, "current_vdot")
+    if current_vdot is None:
+        current_vdot = vdot_zones.estimate_vdot_from_runs(conn)
+        qualifying_runs = store.get_meta(conn, "vdot_qualifying_run_count") or "0"
+        if current_vdot is None:
+            print("No qualifying runs yet for VDOT estimation.")
+        else:
+            print(f"Estimated VDOT: {current_vdot:.1f} (from {qualifying_runs} qualifying runs)")
+    else:
+        print(f"Current VDOT: {current_vdot:.1f} (existing estimate)")
+
+    try:
+        hr_zones = vdot_zones._refresh_hr_zones(conn)
+    except ValueError as e:
+        hr_zones = None
+        print(f"Unable to compute HR zones: {e}")
+
+    if current_vdot is not None and hr_zones:
+        print(f"Training paces computed. HR zones computed from max HR {hr_zones['max_hr']} bpm.")
+    elif current_vdot is not None:
+        print("Training paces computed.")
+    elif hr_zones:
+        print(f"HR zones computed from max HR {hr_zones['max_hr']} bpm.")
+
+    print("Sync complete.")
+
+
+# ─── report ──────────────────────────────────────────────────────────────────
+
+def _fmt_pace(pace_min_per_km):
+    if pace_min_per_km is None:
+        return "—"
+    mins = int(pace_min_per_km)
+    secs = int((pace_min_per_km - mins) * 60)
+    return f"{mins}:{secs:02d}/km"
+
+
+def _fmt_optional(val, fmt=".1f", suffix=""):
+    if val is None:
+        return "n/a"
+    return f"{val:{fmt}}{suffix}"
+
+
+def _meta_float(conn, key):
+    raw = store.get_meta(conn, key)
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def cmd_report(args):
+    conn = store.open_db()
+    runs = store.get_all_runs(conn, limit=args.n)
+
+    if not runs:
+        print("No runs found. Run 'python cli.py sync' first.")
+        return
+
+    zones_context = vdot_zones.build_zones_context(conn)
+    if zones_context:
+        print(zones_context)
+        print()
+
+    header = (
+        f"{'Date':<12} {'Dist':>7} {'Pace':>9} {'AvgHR':>6} "
+        f"{'Cadence':>8} {'V.Osc':>6} {'HR Drift':>9} {'REI':>6}"
+    )
+    print(header)
+    print("-" * len(header))
+
+    for row in runs:
+        dist_km = (row["distance_m"] or 0) / 1000.0
+        date_str = row["start_time"][:10]
+        print(
+            f"{date_str:<12} "
+            f"{dist_km:>6.1f}km "
+            f"{_fmt_pace(row['pace_min_per_km']):>9} "
+            f"{_fmt_optional(row['avg_hr'], '.0f', ' bpm'):>10} "
+            f"{_fmt_optional(row['avg_cadence_spm'], '.0f', ' spm'):>10} "
+            f"{_fmt_optional(row['avg_vertical_osc_cm'], '.1f', 'cm'):>7} "
+            f"{_fmt_optional(row['hr_drift_pct'], '+.1f', '%'):>9} "
+            f"{_fmt_optional(row['rei'], '.1f'):>6}"
+        )
+
+    # REI trend: compare last 10 vs prior 10
+    all_runs = store.get_all_runs(conn)
+    rei_vals = [r["rei"] for r in all_runs if r["rei"] is not None]
+    if len(rei_vals) >= 10:
+        import statistics
+        recent = statistics.mean(rei_vals[:10])
+        prior = statistics.mean(rei_vals[10:20]) if len(rei_vals) >= 20 else None
+        print()
+        if prior:
+            delta = recent - prior
+            direction = "improving" if delta > 0 else "declining"
+            print(f"REI trend (last 10 vs prior 10): {delta:+.1f} pts  [{direction}]")
+        print(f"Average REI (last 10 runs): {recent:.1f}")
+
+
+# ─── inspect ─────────────────────────────────────────────────────────────────
+
+def cmd_inspect(args):
+    conn = store.open_db()
+    row = store.get_run(conn, args.id)
+    if not row:
+        print(f"Activity {args.id} not found. Run 'python cli.py sync' first.")
+        return
+
+    ae_baseline_str = store.get_meta(conn, "ae_baseline")
+    ae_baseline = float(ae_baseline_str) if ae_baseline_str else None
+
+    import datetime
+    run = models.RunSummary(
+        activity_id=row["activity_id"],
+        name=row["name"] or "",
+        start_time=datetime.datetime.fromisoformat(row["start_time"]),
+        duration_sec=row["duration_sec"] or 0,
+        distance_m=row["distance_m"] or 0,
+        calories=row["calories"] or 0,
+        avg_hr=row["avg_hr"],
+        max_hr=row["max_hr"],
+        avg_speed_ms=row["avg_speed_ms"],
+        pace_min_per_km=row["pace_min_per_km"],
+        avg_cadence_spm=row["avg_cadence_spm"],
+        avg_vertical_osc_cm=row["avg_vertical_osc_cm"],
+        avg_ground_contact_ms=row["avg_ground_contact_ms"],
+        avg_stride_length_cm=row["avg_stride_length_cm"],
+        aerobic_efficiency=row["aerobic_efficiency"],
+        hr_drift_pct=row["hr_drift_pct"],
+        cadence_cv=row["cadence_cv"],
+        rei=row["rei"],
+    )
+
+    dist_km = run.distance_m / 1000.0
+    dur_min = run.duration_sec / 60.0
+
+    print(f"\nActivity: {run.name}")
+    print(f"Date    : {run.start_time.strftime('%Y-%m-%d %H:%M')}")
+    print(f"Distance: {dist_km:.2f} km   Duration: {dur_min:.0f} min")
+    print(f"Pace    : {_fmt_pace(run.pace_min_per_km)}   Avg HR: {_fmt_optional(run.avg_hr, '.0f')} bpm")
+    print()
+
+    rei = row["rei"]
+    if rei is not None:
+        print(f"REI: {rei:.1f} / 100")
+        print()
+        components = metrics.rei_component_breakdown(run, ae_baseline)
+        total_weight = sum(c["weight"] for c in components)
+        print(f"{'Component':<22} {'Score':>6}  {'Detail':<38}  {'Weight':>7}  {'Points':>7}")
+        print("-" * 90)
+        for c in components:
+            norm_weight = c["weight"] / total_weight if total_weight else 0
+            print(
+                f"  {c['name']:<20} {c['score']:>5.1f}  {c['detail']:<38}  "
+                f"{norm_weight*100:>5.0f}%   {c['contribution']:>6.1f}"
+            )
+        print("-" * 90)
+        print(f"  {'REI':<48} {rei:>6.1f}")
+    else:
+        print("REI not computed yet. Run 'python cli.py sync' first.")
+
+    print()
+    print(f"Additional metrics:")
+    print(f"  Aerobic Efficiency : {_fmt_optional(run.aerobic_efficiency, '.4f')} min/km/bpm")
+    if ae_baseline:
+        print(f"  AE Baseline        : {ae_baseline:.4f}")
+    print(f"  HR Drift           : {_fmt_optional(run.hr_drift_pct, '+.1f', '%')}")
+    print(f"  Cadence CV         : {_fmt_optional(run.cadence_cv, '.1f', '%')} (lower = more consistent)")
+    if run.avg_stride_length_cm:
+        print(f"  Avg Stride Length  : {run.avg_stride_length_cm:.1f} cm")
+    print(f"  Calories           : {run.calories}")
+
+
+# ─── plot ────────────────────────────────────────────────────────────────────
+
+def cmd_plot(args):
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.dates as mdates
+        import datetime
+    except ImportError:
+        print("matplotlib not installed. Run: pip install matplotlib")
+        return
+
+    conn = store.open_db()
+    all_runs = store.get_all_runs(conn)
+    runs_with_rei = [(r["start_time"][:10], r["rei"]) for r in all_runs if r["rei"] is not None]
+
+    if not runs_with_rei:
+        print("No REI data to plot yet.")
+        return
+
+    runs_with_rei.reverse()  # oldest first
+    dates = [datetime.date.fromisoformat(d) for d, _ in runs_with_rei]
+    reis = [r for _, r in runs_with_rei]
+
+    # Rolling 5-run average
+    import statistics
+    window = 5
+    rolling = []
+    for i in range(len(reis)):
+        start = max(0, i - window + 1)
+        rolling.append(statistics.mean(reis[start:i+1]))
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.scatter(dates, reis, alpha=0.5, s=30, color="#4C9BE8", label="REI per run", zorder=3)
+    ax.plot(dates, rolling, color="#E84C4C", linewidth=2, label=f"{window}-run rolling avg")
+    ax.axhline(y=70, color="gray", linestyle="--", linewidth=0.8, alpha=0.6, label="70 (target)")
+
+    ax.set_title("Run Efficiency Index (REI) Over Time", fontsize=14, fontweight="bold")
+    ax.set_xlabel("Date")
+    ax.set_ylabel("REI (0–100)")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+    ax.xaxis.set_major_locator(mdates.MonthLocator())
+    fig.autofmt_xdate()
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("rei_plot.png", dpi=150)
+    print("Saved rei_plot.png")
+    plt.show()
+
+
+def cmd_vdot(args):
+    conn = store.open_db()
+
+    if args.resting is not None:
+        if args.resting <= 0:
+            print("Resting HR must be positive.")
+            return
+        store.set_meta(conn, "resting_hr", str(args.resting))
+
+    if args.maxhr is not None:
+        if args.maxhr <= 0:
+            print("Max HR must be positive.")
+            return
+        store.set_meta(conn, "max_hr_estimated", str(args.maxhr))
+
+    current_vdot = _meta_float(conn, "current_vdot")
+    if args.recalc or current_vdot is None:
+        print("Estimating VDOT from run data...")
+        current_vdot = vdot_zones.estimate_vdot_from_runs(conn)
+        qualifying_runs = store.get_meta(conn, "vdot_qualifying_run_count") or "0"
+        if current_vdot is None:
+            print("No qualifying runs yet for VDOT estimation.")
+        else:
+            print(f"Estimated VDOT: {current_vdot:.1f} (from {qualifying_runs} qualifying runs)")
+    else:
+        print(f"Current VDOT: {current_vdot:.1f}")
+
+    try:
+        hr_zones = vdot_zones._refresh_hr_zones(conn)
+    except ValueError as e:
+        print(f"Unable to compute HR zones: {e}")
+        return
+
+    context = vdot_zones.build_zones_context(conn)
+    if context:
+        print()
+        print(context)
+        return
+
+    if hr_zones:
+        print()
+        print(f"Heart rate zones computed from max HR {hr_zones['max_hr']} bpm, but no VDOT estimate is available yet.")
+        return
+
+    print("No VDOT estimate or HR zone data available yet. Run `python cli.py sync` after more qualifying runs.")
+
+
+# ─── onboarding ──────────────────────────────────────────────────────────────
+
+def cmd_onboarding(args):
+    conn = store.open_db()
+    if args.reset:
+        # Clear all onboarding-related keys
+        store.set_meta(conn, "onboarding_completed", "0")
+        print("[Onboarding reset — answers cleared]\n")
+
+    onboarding.run_onboarding(conn, full=args.full)
+
+    # Show the resulting profile context
+    profile = onboarding.build_profile_context(conn)
+    if profile:
+        print("\n" + "─" * 60)
+        print("Profile stored. Here's what the coach will see:\n")
+        print(profile)
+
+
+# ─── main ────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(description="Garmin Run Efficiency Tracker")
+    sub = parser.add_subparsers(dest="command")
+
+    sub.add_parser("sync", help="Pull all running data and compute metrics")
+
+    rep = sub.add_parser("report", help="Show recent runs with REI")
+    rep.add_argument("--n", type=int, default=20, help="Number of runs to show (default 20)")
+
+    ins = sub.add_parser("inspect", help="Full REI breakdown for one activity")
+    ins.add_argument("id", type=int, help="Activity ID")
+
+    sub.add_parser("plot", help="Plot REI over time")
+
+    vdot = sub.add_parser("vdot", help="Show or recalculate VDOT estimate and training zones")
+    vdot.add_argument("--recalc", action="store_true", help="Recalculate VDOT from qualifying run data")
+    vdot.add_argument("--resting", type=int, help="Set resting HR for Karvonen zone computation")
+    vdot.add_argument("--maxhr", type=int, help="Override max HR used for estimation and zones")
+
+    ob = sub.add_parser("onboarding", help="Re-run onboarding questions")
+    ob.add_argument("--reset", action="store_true", help="Clear existing answers and start over")
+    ob.add_argument("--full", action="store_true", help="Run full question set (default: MVP 5 questions)")
+
+    args = parser.parse_args()
+
+    if args.command == "sync":
+        cmd_sync(args)
+    elif args.command == "report":
+        cmd_report(args)
+    elif args.command == "inspect":
+        cmd_inspect(args)
+    elif args.command == "plot":
+        cmd_plot(args)
+    elif args.command == "vdot":
+        cmd_vdot(args)
+    elif args.command == "onboarding":
+        cmd_onboarding(args)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

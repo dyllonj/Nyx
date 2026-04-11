@@ -1,0 +1,42 @@
+{
+  "maf_formula": {
+    "description": "Phil Maffetone aerobic base training. MAF HR = 180 minus age, with fitness-history adjustments. All easy and long runs should stay AT or BELOW MAF HR. The lower your HR at a given pace, the better your aerobic base.",
+    "formula": "MAF HR = 180 - age",
+    "adjustments": [
+      {"condition": "recovering from illness, injury, or regression in training", "delta": -10, "example": "35-year-old recovering from injury: 180 - 35 - 10 = 135"},
+      {"condition": "inconsistent training or new to running (under 2 years)", "delta": -5, "example": "35-year-old beginner: 180 - 35 - 5 = 140"},
+      {"condition": "training consistently 2+ years with no issues, making progress", "delta": 0, "example": "35-year-old consistent runner: 180 - 35 = 145"},
+      {"condition": "competing for 2+ years injury-free, performance improving", "delta": 5, "example": "35-year-old healthy competitor: 180 - 35 + 5 = 150"}
+    ],
+    "usage": "Run every easy workout at or below your MAF HR. If you must slow to a walk to keep HR down, do it. After 3-6 months your pace at MAF HR will improve significantly — this is the aerobic efficiency gain.",
+    "caveat": "The MAF formula is based on Maffetone's empirical observations, not peer-reviewed controlled trials. It is a practical heuristic that works well for many runners but is not scientifically validated in the same way as lactate testing. Individual variation is large. Use it as a starting point, not a rigid rule."
+  },
+  "garmin_5_zone": {
+    "description": "Garmin's standard 5-zone HR model based on percentage of max HR. Max HR estimate: 220 minus age (Tanaka formula: 208 - 0.7*age is more accurate for adults).",
+    "zones": [
+      {"zone": 1, "name": "Warm Up", "pct_max_hr": "50-60%", "purpose": "Active recovery, warm-up, cool-down", "effort": "Very easy, can hold full conversation"},
+      {"zone": 2, "name": "Easy", "pct_max_hr": "60-70%", "purpose": "Aerobic base building, fat burning, long runs", "effort": "Easy, can hold full conversation"},
+      {"zone": 3, "name": "Aerobic", "pct_max_hr": "70-80%", "purpose": "Improve aerobic capacity, marathon pace", "effort": "Moderate, can speak in sentences"},
+      {"zone": 4, "name": "Threshold", "pct_max_hr": "80-90%", "purpose": "Lactate threshold improvement, tempo runs", "effort": "Hard, can speak only a few words"},
+      {"zone": 5, "name": "Maximum", "pct_max_hr": "90-100%", "purpose": "VO2max development, interval training", "effort": "Very hard, cannot speak"}
+    ]
+  },
+  "80_20_zones": {
+    "description": "Matt Fitzgerald's 80/20 running approach: 80% of weekly volume in low intensity (Zones 1-2), 20% in moderate-to-high intensity (Zones 3-5). Most recreational runners do the inverse and overtrain the middle zone.",
+    "zones": [
+      {"zone": 1, "pct_max_hr": "up to 75%", "type": "low intensity", "label": "Very Easy"},
+      {"zone": 2, "pct_max_hr": "75-80%", "type": "low intensity", "label": "Easy"},
+      {"zone": 3, "pct_max_hr": "80-87%", "type": "moderate — avoid spending too much time here", "label": "Moderate"},
+      {"zone": 4, "pct_max_hr": "87-93%", "type": "high intensity", "label": "Hard"},
+      {"zone": 5, "pct_max_hr": "93-100%", "type": "high intensity", "label": "Very Hard / Max"}
+    ],
+    "key_principle": "Zone 3 is the danger zone for recreational runners — it feels productive but produces excessive fatigue without sufficient aerobic adaptation. Stay in Zone 1-2 for easy days and push to Zone 4-5 on quality days."
+  },
+  "lactate_threshold": {
+    "description": "There are two physiologically distinct lactate thresholds, often conflated. LT1 (aerobic threshold / first threshold): the intensity at which lactate first rises above resting levels (~2 mmol/L). Running at or below LT1 is purely aerobic. LT2 (lactate threshold / second threshold / OBLA): the intensity at which lactate accumulates faster than it can be cleared (~4 mmol/L, varies individually). LT2 is the classic 'threshold' used in training.",
+    "lt1_hr": "~75-80% of max HR for trained runners. Corresponds to the top of Zone 2 / bottom of Zone 3. This is easy/moderate aerobic effort.",
+    "lt2_hr": "~85-92% of max HR for trained runners. This is Daniels' T-pace (threshold pace) and Garmin's Zone 4. Comfortably hard — can speak only short phrases. This is the primary target for tempo runs and cruise intervals.",
+    "training_implication": "Tempo runs at LT2 pace (T-pace) for 20–40 minutes improve lactate clearance capacity and raise the pace you can sustain in races. LT1 training (easy running) builds the aerobic base that allows high training volume. Conflating LT1 and LT2 leads to running most easy runs too fast.",
+    "garmin_connection": "Garmin estimates LT2 from running data. A rising LT2 HR over time (or same LT2 HR at faster pace) indicates improving fitness. The T-pace in the VDOT table corresponds to LT2 effort."
+  }
+}

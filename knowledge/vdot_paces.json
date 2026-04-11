@@ -1,0 +1,954 @@
+[
+  {
+    "vdot": 30,
+    "easy_pace_range_min_per_km": "7:20\u20138:43",
+    "marathon_pace_min_per_km": "6:40",
+    "threshold_pace_min_per_km": "5:54",
+    "interval_pace_min_per_km": "5:21",
+    "repetition_pace_min_per_km": "5:42",
+    "marathon_finish_estimate": "4:41:18",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 31,
+    "easy_pace_range_min_per_km": "7:09\u20138:30",
+    "marathon_pace_min_per_km": "6:32",
+    "threshold_pace_min_per_km": "5:47",
+    "interval_pace_min_per_km": "5:14",
+    "repetition_pace_min_per_km": "5:32",
+    "marathon_finish_estimate": "4:35:40",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 32,
+    "easy_pace_range_min_per_km": "6:58\u20138:18",
+    "marathon_pace_min_per_km": "6:24",
+    "threshold_pace_min_per_km": "5:40",
+    "interval_pace_min_per_km": "5:07",
+    "repetition_pace_min_per_km": "5:23",
+    "marathon_finish_estimate": "4:30:03",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 33,
+    "easy_pace_range_min_per_km": "6:48\u20138:06",
+    "marathon_pace_min_per_km": "6:16",
+    "threshold_pace_min_per_km": "5:33",
+    "interval_pace_min_per_km": "5:01",
+    "repetition_pace_min_per_km": "5:14",
+    "marathon_finish_estimate": "4:24:25",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 34,
+    "easy_pace_range_min_per_km": "6:39\u20137:55",
+    "marathon_pace_min_per_km": "6:08",
+    "threshold_pace_min_per_km": "5:26",
+    "interval_pace_min_per_km": "4:54",
+    "repetition_pace_min_per_km": "5:06",
+    "marathon_finish_estimate": "4:18:48",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 35,
+    "easy_pace_range_min_per_km": "6:30\u20137:45",
+    "marathon_pace_min_per_km": "6:00",
+    "threshold_pace_min_per_km": "5:19",
+    "interval_pace_min_per_km": "4:47",
+    "repetition_pace_min_per_km": "4:59",
+    "marathon_finish_estimate": "4:13:10",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 36,
+    "easy_pace_range_min_per_km": "6:21\u20137:35",
+    "marathon_pace_min_per_km": "5:49",
+    "threshold_pace_min_per_km": "5:13",
+    "interval_pace_min_per_km": "4:42",
+    "repetition_pace_min_per_km": "4:51",
+    "marathon_finish_estimate": "4:05:34",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 37,
+    "easy_pace_range_min_per_km": "6:13\u20137:26",
+    "marathon_pace_min_per_km": "5:38",
+    "threshold_pace_min_per_km": "5:07",
+    "interval_pace_min_per_km": "4:37",
+    "repetition_pace_min_per_km": "4:44",
+    "marathon_finish_estimate": "3:57:59",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 38,
+    "easy_pace_range_min_per_km": "6:06\u20137:16",
+    "marathon_pace_min_per_km": "5:28",
+    "threshold_pace_min_per_km": "5:02",
+    "interval_pace_min_per_km": "4:31",
+    "repetition_pace_min_per_km": "4:38",
+    "marathon_finish_estimate": "3:50:23",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 39,
+    "easy_pace_range_min_per_km": "5:58\u20137:08",
+    "marathon_pace_min_per_km": "5:17",
+    "threshold_pace_min_per_km": "4:56",
+    "interval_pace_min_per_km": "4:26",
+    "repetition_pace_min_per_km": "4:31",
+    "marathon_finish_estimate": "3:42:47",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 40,
+    "easy_pace_range_min_per_km": "5:51\u20136:59",
+    "marathon_pace_min_per_km": "5:06",
+    "threshold_pace_min_per_km": "4:50",
+    "interval_pace_min_per_km": "4:21",
+    "repetition_pace_min_per_km": "4:25",
+    "marathon_finish_estimate": "3:35:12",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 41,
+    "easy_pace_range_min_per_km": "5:44\u20136:51",
+    "marathon_pace_min_per_km": "5:01",
+    "threshold_pace_min_per_km": "4:45",
+    "interval_pace_min_per_km": "4:17",
+    "repetition_pace_min_per_km": "4:19",
+    "marathon_finish_estimate": "3:31:32",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 42,
+    "easy_pace_range_min_per_km": "5:38\u20136:44",
+    "marathon_pace_min_per_km": "4:56",
+    "threshold_pace_min_per_km": "4:40",
+    "interval_pace_min_per_km": "4:12",
+    "repetition_pace_min_per_km": "4:14",
+    "marathon_finish_estimate": "3:27:53",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 43,
+    "easy_pace_range_min_per_km": "5:31\u20136:36",
+    "marathon_pace_min_per_km": "4:50",
+    "threshold_pace_min_per_km": "4:35",
+    "interval_pace_min_per_km": "4:08",
+    "repetition_pace_min_per_km": "4:09",
+    "marathon_finish_estimate": "3:24:13",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 44,
+    "easy_pace_range_min_per_km": "5:25\u20136:29",
+    "marathon_pace_min_per_km": "4:45",
+    "threshold_pace_min_per_km": "4:30",
+    "interval_pace_min_per_km": "4:03",
+    "repetition_pace_min_per_km": "4:04",
+    "marathon_finish_estimate": "3:20:34",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 45,
+    "easy_pace_range_min_per_km": "5:19\u20136:22",
+    "marathon_pace_min_per_km": "4:40",
+    "threshold_pace_min_per_km": "4:25",
+    "interval_pace_min_per_km": "3:59",
+    "repetition_pace_min_per_km": "3:59",
+    "marathon_finish_estimate": "3:16:55",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 46,
+    "easy_pace_range_min_per_km": "5:14\u20136:16",
+    "marathon_pace_min_per_km": "4:35",
+    "threshold_pace_min_per_km": "4:20",
+    "interval_pace_min_per_km": "3:55",
+    "repetition_pace_min_per_km": "3:54",
+    "marathon_finish_estimate": "3:13:24",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 47,
+    "easy_pace_range_min_per_km": "5:09\u20136:10",
+    "marathon_pace_min_per_km": "4:30",
+    "threshold_pace_min_per_km": "4:15",
+    "interval_pace_min_per_km": "3:50",
+    "repetition_pace_min_per_km": "3:50",
+    "marathon_finish_estimate": "3:09:53",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 48,
+    "easy_pace_range_min_per_km": "5:03\u20136:03",
+    "marathon_pace_min_per_km": "4:25",
+    "threshold_pace_min_per_km": "4:10",
+    "interval_pace_min_per_km": "3:46",
+    "repetition_pace_min_per_km": "3:45",
+    "marathon_finish_estimate": "3:06:22",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 49,
+    "easy_pace_range_min_per_km": "4:58\u20135:58",
+    "marathon_pace_min_per_km": "4:20",
+    "threshold_pace_min_per_km": "4:05",
+    "interval_pace_min_per_km": "3:41",
+    "repetition_pace_min_per_km": "3:41",
+    "marathon_finish_estimate": "3:02:51",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 50,
+    "easy_pace_range_min_per_km": "4:54\u20135:52",
+    "marathon_pace_min_per_km": "4:15",
+    "threshold_pace_min_per_km": "4:00",
+    "interval_pace_min_per_km": "3:37",
+    "repetition_pace_min_per_km": "3:37",
+    "marathon_finish_estimate": "2:59:20",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 51,
+    "easy_pace_range_min_per_km": "4:49\u20135:46",
+    "marathon_pace_min_per_km": "4:12",
+    "threshold_pace_min_per_km": "3:57",
+    "interval_pace_min_per_km": "3:34",
+    "repetition_pace_min_per_km": "3:33",
+    "marathon_finish_estimate": "2:56:56",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 52,
+    "easy_pace_range_min_per_km": "4:44\u20135:41",
+    "marathon_pace_min_per_km": "4:08",
+    "threshold_pace_min_per_km": "3:54",
+    "interval_pace_min_per_km": "3:31",
+    "repetition_pace_min_per_km": "3:30",
+    "marathon_finish_estimate": "2:54:33",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 53,
+    "easy_pace_range_min_per_km": "4:40\u20135:36",
+    "marathon_pace_min_per_km": "4:05",
+    "threshold_pace_min_per_km": "3:50",
+    "interval_pace_min_per_km": "3:28",
+    "repetition_pace_min_per_km": "3:26",
+    "marathon_finish_estimate": "2:52:09",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 54,
+    "easy_pace_range_min_per_km": "4:36\u20135:31",
+    "marathon_pace_min_per_km": "4:01",
+    "threshold_pace_min_per_km": "3:47",
+    "interval_pace_min_per_km": "3:25",
+    "repetition_pace_min_per_km": "3:23",
+    "marathon_finish_estimate": "2:49:46",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 55,
+    "easy_pace_range_min_per_km": "4:32\u20135:26",
+    "marathon_pace_min_per_km": "3:58",
+    "threshold_pace_min_per_km": "3:44",
+    "interval_pace_min_per_km": "3:22",
+    "repetition_pace_min_per_km": "3:20",
+    "marathon_finish_estimate": "2:47:22",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 56,
+    "easy_pace_range_min_per_km": "4:28\u20135:21",
+    "marathon_pace_min_per_km": "3:55",
+    "threshold_pace_min_per_km": "3:41",
+    "interval_pace_min_per_km": "3:19",
+    "repetition_pace_min_per_km": "3:16",
+    "marathon_finish_estimate": "2:45:16",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 57,
+    "easy_pace_range_min_per_km": "4:24\u20135:17",
+    "marathon_pace_min_per_km": "3:52",
+    "threshold_pace_min_per_km": "3:39",
+    "interval_pace_min_per_km": "3:17",
+    "repetition_pace_min_per_km": "3:13",
+    "marathon_finish_estimate": "2:43:09",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 58,
+    "easy_pace_range_min_per_km": "4:20\u20135:13",
+    "marathon_pace_min_per_km": "3:49",
+    "threshold_pace_min_per_km": "3:36",
+    "interval_pace_min_per_km": "3:14",
+    "repetition_pace_min_per_km": "3:10",
+    "marathon_finish_estimate": "2:41:03",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 59,
+    "easy_pace_range_min_per_km": "4:17\u20135:08",
+    "marathon_pace_min_per_km": "3:46",
+    "threshold_pace_min_per_km": "3:34",
+    "interval_pace_min_per_km": "3:12",
+    "repetition_pace_min_per_km": "3:07",
+    "marathon_finish_estimate": "2:38:56",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 60,
+    "easy_pace_range_min_per_km": "4:13\u20135:04",
+    "marathon_pace_min_per_km": "3:43",
+    "threshold_pace_min_per_km": "3:31",
+    "interval_pace_min_per_km": "3:09",
+    "repetition_pace_min_per_km": "3:05",
+    "marathon_finish_estimate": "2:36:49",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 61,
+    "easy_pace_range_min_per_km": "4:10\u20135:00",
+    "marathon_pace_min_per_km": "3:40",
+    "threshold_pace_min_per_km": "3:29",
+    "interval_pace_min_per_km": "3:07",
+    "repetition_pace_min_per_km": "3:02",
+    "marathon_finish_estimate": "2:35:00",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 62,
+    "easy_pace_range_min_per_km": "4:07\u20134:56",
+    "marathon_pace_min_per_km": "3:38",
+    "threshold_pace_min_per_km": "3:26",
+    "interval_pace_min_per_km": "3:05",
+    "repetition_pace_min_per_km": "2:59",
+    "marathon_finish_estimate": "2:33:10",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 63,
+    "easy_pace_range_min_per_km": "4:04\u20134:52",
+    "marathon_pace_min_per_km": "3:35",
+    "threshold_pace_min_per_km": "3:24",
+    "interval_pace_min_per_km": "3:02",
+    "repetition_pace_min_per_km": "2:57",
+    "marathon_finish_estimate": "2:31:20",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 64,
+    "easy_pace_range_min_per_km": "4:00\u20134:49",
+    "marathon_pace_min_per_km": "3:33",
+    "threshold_pace_min_per_km": "3:21",
+    "interval_pace_min_per_km": "3:00",
+    "repetition_pace_min_per_km": "2:54",
+    "marathon_finish_estimate": "2:29:31",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 65,
+    "easy_pace_range_min_per_km": "3:57\u20134:45",
+    "marathon_pace_min_per_km": "3:30",
+    "threshold_pace_min_per_km": "3:19",
+    "interval_pace_min_per_km": "2:58",
+    "repetition_pace_min_per_km": "2:52",
+    "marathon_finish_estimate": "2:27:41",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 66,
+    "easy_pace_range_min_per_km": "3:55\u20134:42",
+    "marathon_pace_min_per_km": "3:28",
+    "threshold_pace_min_per_km": "3:17",
+    "interval_pace_min_per_km": "2:56",
+    "repetition_pace_min_per_km": "2:50",
+    "marathon_finish_estimate": "2:26:00",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 67,
+    "easy_pace_range_min_per_km": "3:52\u20134:38",
+    "marathon_pace_min_per_km": "3:25",
+    "threshold_pace_min_per_km": "3:15",
+    "interval_pace_min_per_km": "2:54",
+    "repetition_pace_min_per_km": "2:47",
+    "marathon_finish_estimate": "2:24:18",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 68,
+    "easy_pace_range_min_per_km": "3:49\u20134:35",
+    "marathon_pace_min_per_km": "3:23",
+    "threshold_pace_min_per_km": "3:13",
+    "interval_pace_min_per_km": "2:53",
+    "repetition_pace_min_per_km": "2:45",
+    "marathon_finish_estimate": "2:22:37",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 69,
+    "easy_pace_range_min_per_km": "3:46\u20134:32",
+    "marathon_pace_min_per_km": "3:20",
+    "threshold_pace_min_per_km": "3:11",
+    "interval_pace_min_per_km": "2:51",
+    "repetition_pace_min_per_km": "2:43",
+    "marathon_finish_estimate": "2:20:56",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 70,
+    "easy_pace_range_min_per_km": "3:44\u20134:29",
+    "marathon_pace_min_per_km": "3:18",
+    "threshold_pace_min_per_km": "3:09",
+    "interval_pace_min_per_km": "2:49",
+    "repetition_pace_min_per_km": "2:41",
+    "marathon_finish_estimate": "2:19:15",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 71,
+    "easy_pace_range_min_per_km": "3:41\u20134:26",
+    "marathon_pace_min_per_km": "3:16",
+    "threshold_pace_min_per_km": "3:07",
+    "interval_pace_min_per_km": "2:47",
+    "repetition_pace_min_per_km": "2:39",
+    "marathon_finish_estimate": "2:17:42",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 72,
+    "easy_pace_range_min_per_km": "3:39\u20134:23",
+    "marathon_pace_min_per_km": "3:14",
+    "threshold_pace_min_per_km": "3:05",
+    "interval_pace_min_per_km": "2:46",
+    "repetition_pace_min_per_km": "2:37",
+    "marathon_finish_estimate": "2:16:09",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 73,
+    "easy_pace_range_min_per_km": "3:36\u20134:20",
+    "marathon_pace_min_per_km": "3:11",
+    "threshold_pace_min_per_km": "3:04",
+    "interval_pace_min_per_km": "2:44",
+    "repetition_pace_min_per_km": "2:35",
+    "marathon_finish_estimate": "2:14:36",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 74,
+    "easy_pace_range_min_per_km": "3:34\u20134:17",
+    "marathon_pace_min_per_km": "3:09",
+    "threshold_pace_min_per_km": "3:02",
+    "interval_pace_min_per_km": "2:43",
+    "repetition_pace_min_per_km": "2:33",
+    "marathon_finish_estimate": "2:13:03",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 75,
+    "easy_pace_range_min_per_km": "3:31\u20134:14",
+    "marathon_pace_min_per_km": "3:07",
+    "threshold_pace_min_per_km": "3:00",
+    "interval_pace_min_per_km": "2:41",
+    "repetition_pace_min_per_km": "2:32",
+    "marathon_finish_estimate": "2:11:30",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 76,
+    "easy_pace_range_min_per_km": "3:29\u20134:11",
+    "marathon_pace_min_per_km": "3:05",
+    "threshold_pace_min_per_km": "2:58",
+    "interval_pace_min_per_km": "2:39",
+    "repetition_pace_min_per_km": "2:30",
+    "marathon_finish_estimate": "2:10:15",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 77,
+    "easy_pace_range_min_per_km": "3:27\u20134:09",
+    "marathon_pace_min_per_km": "3:03",
+    "threshold_pace_min_per_km": "2:57",
+    "interval_pace_min_per_km": "2:38",
+    "repetition_pace_min_per_km": "2:28",
+    "marathon_finish_estimate": "2:08:59",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 78,
+    "easy_pace_range_min_per_km": "3:25\u20134:06",
+    "marathon_pace_min_per_km": "3:02",
+    "threshold_pace_min_per_km": "2:55",
+    "interval_pace_min_per_km": "2:36",
+    "repetition_pace_min_per_km": "2:27",
+    "marathon_finish_estimate": "2:07:43",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 79,
+    "easy_pace_range_min_per_km": "3:23\u20134:04",
+    "marathon_pace_min_per_km": "3:00",
+    "threshold_pace_min_per_km": "2:54",
+    "interval_pace_min_per_km": "2:35",
+    "repetition_pace_min_per_km": "2:25",
+    "marathon_finish_estimate": "2:06:27",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 80,
+    "easy_pace_range_min_per_km": "3:21\u20134:01",
+    "marathon_pace_min_per_km": "2:58",
+    "threshold_pace_min_per_km": "2:52",
+    "interval_pace_min_per_km": "2:33",
+    "repetition_pace_min_per_km": "2:23",
+    "marathon_finish_estimate": "2:05:11",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 81,
+    "easy_pace_range_min_per_km": "3:19\u20133:59",
+    "marathon_pace_min_per_km": "2:56",
+    "threshold_pace_min_per_km": "2:50",
+    "interval_pace_min_per_km": "2:32",
+    "repetition_pace_min_per_km": "2:22",
+    "marathon_finish_estimate": "2:03:55",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 82,
+    "easy_pace_range_min_per_km": "3:17\u20133:56",
+    "marathon_pace_min_per_km": "2:54",
+    "threshold_pace_min_per_km": "2:49",
+    "interval_pace_min_per_km": "2:30",
+    "repetition_pace_min_per_km": "2:20",
+    "marathon_finish_estimate": "2:02:39",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 83,
+    "easy_pace_range_min_per_km": "3:15\u20133:54",
+    "marathon_pace_min_per_km": "2:53",
+    "threshold_pace_min_per_km": "2:47",
+    "interval_pace_min_per_km": "2:29",
+    "repetition_pace_min_per_km": "2:19",
+    "marathon_finish_estimate": "2:01:23",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 84,
+    "easy_pace_range_min_per_km": "3:13\u20133:52",
+    "marathon_pace_min_per_km": "2:51",
+    "threshold_pace_min_per_km": "2:46",
+    "interval_pace_min_per_km": "2:27",
+    "repetition_pace_min_per_km": "2:17",
+    "marathon_finish_estimate": "2:00:07",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  },
+  {
+    "vdot": 85,
+    "easy_pace_range_min_per_km": "3:11\u20133:50",
+    "marathon_pace_min_per_km": "2:49",
+    "threshold_pace_min_per_km": "2:44",
+    "interval_pace_min_per_km": "2:26",
+    "repetition_pace_min_per_km": "2:16",
+    "marathon_finish_estimate": "1:58:51",
+    "zone_notes": {
+      "easy": "59\u201374% VO2max; aerobic base, recovery",
+      "marathon": "~88% VO2max; marathon race pace",
+      "threshold": "~93\u201397% VO2max; comfortably hard tempo, ~LT2",
+      "interval": "~105\u2013110% VO2max; 2-mile race effort, VO2max stimulus",
+      "repetition": "1-mile race pace; speed and running economy"
+    },
+    "source": "Daniels Running Formula, 3rd ed. T/I/M paces from published metric table (interpolated). E-pace via Daniels-Gilbert VO2 formula. R-pace via bisection on 1600m race equivalent."
+  }
+]

@@ -1,0 +1,12 @@
+[
+  {"temp_celsius": "under 10°C", "humidity": "any", "adjustment_pct": -1, "hr_impact_bpm": -3, "notes": "Cold conditions. Slightly faster pace possible. Risk of respiratory discomfort. Warm up thoroughly."},
+  {"temp_celsius": "10-15°C", "humidity": "any", "adjustment_pct": 0, "hr_impact_bpm": 0, "notes": "Near-ideal running conditions. No adjustment needed."},
+  {"temp_celsius": "16-18°C", "humidity": "under 60%", "adjustment_pct": 0, "hr_impact_bpm": 0, "notes": "Ideal racing conditions. Performance benchmarks are most accurate here."},
+  {"temp_celsius": "18-21°C", "humidity": "under 60%", "adjustment_pct": 1, "hr_impact_bpm": 2, "notes": "Slightly warm. Minor performance reduction. Stay hydrated."},
+  {"temp_celsius": "21-24°C", "humidity": "any", "adjustment_pct": 3, "hr_impact_bpm": 4, "notes": "Warm. Slow easy runs by 3%. Heart rate will run 4-5 bpm higher at same effort. Increase fluid intake."},
+  {"temp_celsius": "24-27°C", "humidity": "under 60%", "adjustment_pct": 4, "hr_impact_bpm": 6, "notes": "Hot. Reduce intensity. Consider shortening workouts. REI will appear lower — normal in heat."},
+  {"temp_celsius": "24-27°C", "humidity": "over 60%", "adjustment_pct": 6, "hr_impact_bpm": 8, "notes": "Hot and humid. Significant performance reduction. Aerobic efficiency (AE) will worsen — not a fitness regression, just heat stress."},
+  {"temp_celsius": "27-32°C", "humidity": "any", "adjustment_pct": 8, "hr_impact_bpm": 10, "notes": "Very hot. Reduce volume. HR 8-12 bpm above normal at same effort is expected. If HR drift (HRD) is >10%, cut the run short."},
+  {"temp_celsius": "over 32°C", "humidity": "any", "adjustment_pct": 12, "hr_impact_bpm": 15, "notes": "Dangerous heat. Consider moving workout indoors or to early morning. Any metrics collected in these conditions should be excluded from baseline calculations."},
+  {"temp_celsius": "any", "humidity": "over 75%", "adjustment_pct": 5, "hr_impact_bpm": 7, "notes": "High humidity effect is additive to temperature. Body cannot cool efficiently via sweat evaporation. Treat AE degradation as environmental, not a fitness decline."}
+]

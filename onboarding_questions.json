@@ -1,0 +1,535 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "Onboarding question database for AI running coach. Questions capture what Garmin data cannot show. Coach already has full run history (pace, HR, cadence, V.Osc, GCT, HR drift, weekly mileage, REI, AE baseline).",
+    "design_principles": [
+      "Start with identity/narrative (low threat, builds rapport), progress to injury (higher stakes), end with sensitive topics (rest relationship, body/food)",
+      "Conversational phrasing — feels like a smart human coach, not a form",
+      "Each question notes what it surfaces and how the answer shapes coaching",
+      "Branch logic on key answers to avoid irrelevant follow-ups",
+      "MVP set of 5 questions for impatient users"
+    ]
+  },
+
+  "mvp_set": {
+    "description": "If the user wants to skip the full intake, ask only these 5. They give the most signal per question.",
+    "questions": ["opening.Q1", "goals.Q1", "injury.Q1", "lifestyle.Q3", "calibration.Q1"],
+    "question_texts": [
+      "Before I dig into your data — what made you decide to get coaching support right now? What's the thing you actually want to change?",
+      "If we got to the end of a season together and you looked back and felt like it was completely worth it — what would have happened? What would be different?",
+      "Any injuries, surgeries, or body parts that have given you recurring trouble? Doesn't need to be dramatic — even 'my left knee gets grumpy on long runs' counts.",
+      "On a normal week, what does life look like outside of running — work stress, sleep, family demands? I'm asking because that context shapes everything about how I'll coach you.",
+      "When you go out for what you'd call an easy run, what does it actually feel like? Could you hold a full phone conversation the whole time?"
+    ]
+  },
+
+  "categories": {
+
+    "opening": {
+      "order": 1,
+      "description": "Warm entry. Establishes tone, surfaces 'why now', sets rapport before clinical questions.",
+      "questions": [
+        {
+          "id": "opening.Q1",
+          "text": "Before I dig into your data, I want to hear from you — what's prompting you to get coaching support right now?",
+          "type": "open",
+          "surfaces": "Triggering event (medical scare, race goal, life change, stagnation). High predictive value for urgency and dropout risk.",
+          "coaching_implication": "Medical/health trigger → conservative load management, more frequent check-ins. Race deadline → build timeline backwards. Social trigger (friend doing it) → lower intrinsic motivation, needs engagement strategy.",
+          "follow_ups": []
+        },
+        {
+          "id": "opening.Q2",
+          "text": "Has anything changed recently — in your running, your health, or your life — that's making this feel important right now?",
+          "type": "open",
+          "surfaces": "Confirms or deepens triggering event. Surfaces life context changes (new job, injury, weight change, relationship change) that affect load tolerance.",
+          "coaching_implication": "Major life stressor active → lower training ceiling, more flexibility in plan structure.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "identity": {
+      "order": 2,
+      "description": "Identity and motivation type. Predicts long-term adherence and the communication style that works.",
+      "questions": [
+        {
+          "id": "identity.Q1",
+          "text": "When someone asks what your hobbies are, do you say you're a runner — or that you run?",
+          "type": "open",
+          "surfaces": "Identity vs. behavior framing. 'I am a runner' predicts significantly higher long-term adherence than 'I run to [outcome]'.",
+          "coaching_implication": "Identity-based: reinforce runner identity in coaching language. Behavior-based: anchor coaching to their stated outcome goal, help build identity over time.",
+          "follow_ups": []
+        },
+        {
+          "id": "identity.Q2",
+          "text": "What keeps you coming back to running? What does it give you that other things don't?",
+          "type": "open",
+          "surfaces": "Core motivation type: competitive (PRs, rankings), achievement (mastery, personal bests), social (community, group runs), lifestyle (stress relief, mental health, identity).",
+          "coaching_implication": "Competitor → use comparative benchmarks, age-group framing, race targets. Achiever → historical progress charts, PR tracking. Social → group run recommendations, community framing. Lifestyle → permission to skip, stress-aware scheduling, de-emphasize outcome goals.",
+          "follow_ups": []
+        },
+        {
+          "id": "identity.Q3",
+          "text": "How important is it to you to know where you stand compared to other runners — in races, on Strava, in your age group?",
+          "type": "scale_1_5",
+          "scale_labels": {"1": "Not at all — I only care about my own progress", "5": "Very — I'm motivated by beating others or ranking well"},
+          "surfaces": "Ego-orientation vs task-orientation (Nicholls). Shapes competitive language and how coach frames progress.",
+          "coaching_implication": "High (4-5): Use competitive framing, age-group context, race placement. Low (1-2): Never use comparative language; use personal-best framing exclusively.",
+          "follow_ups": []
+        },
+        {
+          "id": "identity.Q4",
+          "text": "Do you mostly run alone, with others, or a mix? And what's your preference — is that by choice or circumstance?",
+          "type": "open",
+          "surfaces": "Social running preference. Distinction between current behavior and preference matters for recommendations.",
+          "coaching_implication": "Social preference but running alone → recommend parkrun, running clubs, group events. Prefers solo → don't push social recommendations.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "goals": {
+      "order": 3,
+      "description": "Goal elicitation. Designed to surface the actual goal beneath the stated goal.",
+      "questions": [
+        {
+          "id": "goals.Q1",
+          "text": "If we got to the end of a season together and you looked back and thought 'that was completely worth it' — what would have happened? What would be different?",
+          "type": "open",
+          "surfaces": "Real outcome goal vs. social-desirability answer. Future-state framing bypasses the tendency to state ambitious but unowned goals.",
+          "coaching_implication": "Race-specific answer → build backward from race date. Feeling/identity answer → process goals, consistency metrics. Vague answer → probe with Q2.",
+          "follow_ups": [
+            {
+              "condition": "mentions a specific race or time goal",
+              "question": "Which race, and when is it? And is that a 'dream goal' or a 'realistic goal' — or are they the same thing for you?",
+              "surfaces": "Goal realism. The distinction between dream and realistic reveals risk tolerance and fear of failure."
+            },
+            {
+              "condition": "no specific race mentioned",
+              "question": "Is there a distance or event on your list — something you've thought about but maybe not committed to yet?",
+              "surfaces": "Latent goals. Many runners have a 'someday marathon' they won't volunteer."
+            }
+          ]
+        },
+        {
+          "id": "goals.Q2",
+          "text": "What would feel like failure at the end of the year, even if you technically hit a number?",
+          "type": "open",
+          "surfaces": "Actual constraint / fear. Often reveals fear of embarrassment, injury recurrence, or time conflict rather than performance. More diagnostic than the goal itself.",
+          "coaching_implication": "Injury fear → proactive injury prevention framing in all recommendations. Social embarrassment → desensitize pace shame, normalize Zone 2 pacing. Time constraint → schedule-first plan design.",
+          "follow_ups": []
+        },
+        {
+          "id": "goals.Q2b",
+          "text": "On a scale of 1-10, how important is achieving that goal to you? And separately — how confident are you that you can actually pull it off?",
+          "type": "two_scales",
+          "scale_labels": {"importance": "1=nice to have, 10=this matters deeply", "confidence": "1=very uncertain, 10=completely confident"},
+          "surfaces": "Motivational Interviewing importance/confidence gap. The gap between scores is more diagnostic than either alone. High importance + low confidence = needs early wins and competence building. Low importance = stated goal may not be the real goal. High confidence + low importance = not invested enough to sustain hard training.",
+          "coaching_implication": "Gap >3 points: address the gap explicitly before prescribing training. Low confidence: design for early wins in first 4 weeks. Low importance: probe for the real underlying goal with follow-up.",
+          "follow_ups": []
+        },
+        {
+          "id": "goals.Q3",
+          "text": "Is there something you've told yourself you can't do as a runner that you'd secretly like to prove wrong?",
+          "type": "open",
+          "surfaces": "Hidden aspirational goal and limiting beliefs. High engagement value — often the most motivating goal revealed in onboarding.",
+          "coaching_implication": "Use as an anchor for long-term goal setting. Reference back when motivation dips.",
+          "follow_ups": []
+        },
+        {
+          "id": "goals.Q4",
+          "text": "Do you care more about how you perform relative to other runners, relative to your past self, or relative to hitting a specific target time?",
+          "type": "multiple_choice",
+          "options": ["vs. other runners / age group", "vs. my past self / PRs", "vs. a specific target time", "I don't care about performance — running is about how it feels"],
+          "surfaces": "Goal orientation type. Confirms/extends identity.Q3.",
+          "coaching_implication": "Shapes how progress is framed and how race previews are communicated.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "injury": {
+      "order": 4,
+      "description": "Injury history and current status. Most important clinical section. Recurrence rates are high — past injury is the best predictor of future injury.",
+      "questions": [
+        {
+          "id": "injury.Q1",
+          "text": "Walk me through any injuries that have stopped you from running for more than a week — what happened, roughly when, and how long it took to resolve.",
+          "type": "open",
+          "surfaces": "Full injury history. Pattern of injury types reveals systemic risk (multiple types in 2 years = overtraining/underfueling) vs. isolated incidents.",
+          "coaching_implication": "Stress fracture history → bone loading protocol, calcium/Vitamin D flag, conservative mileage increases. Achilles/tendon → no back-to-back hard days, Alfredson protocol awareness. IT band → hip strength focus. Multiple injuries in 2 years → check for RED-S pattern.",
+          "follow_ups": [
+            {
+              "condition": "mentions stress fracture",
+              "question": "Where was the stress fracture — which bone? And do you know if it was diagnosed by imaging?",
+              "surfaces": "High-risk locations (femoral neck, navicular, anterior tibia) require specific protocols. Unimaged 'stress fractures' may have been MTSS."
+            },
+            {
+              "condition": "mentions Achilles or tendon issue",
+              "question": "Was it at the heel (where Achilles meets the bone) or up in the tendon itself — or do you not remember?",
+              "surfaces": "Insertional vs mid-portion distinction changes rehab protocol significantly."
+            }
+          ]
+        },
+        {
+          "id": "injury.Q2",
+          "text": "Is there anything that regularly bothers you when you run that you've just learned to live with?",
+          "type": "open",
+          "surfaces": "Current subclinical injury. 'Learning to live with' something is a major red flag — runners minimize chronic pain.",
+          "coaching_implication": "Any positive answer → treat as active injury issue. Flag for monitoring in Garmin data (asymmetric GCT, cadence changes). Recommend evaluation if persisting.",
+          "follow_ups": []
+        },
+        {
+          "id": "injury.Q3",
+          "text": "Have you ever been told to stop running by a doctor or physio? What did you do?",
+          "type": "open",
+          "surfaces": "Injury behavior (compliance). 'I kept running anyway' is a risk-tolerance indicator — predicts future ignoring of warning signs.",
+          "coaching_implication": "Non-complier → explicit injury warning thresholds in coaching (e.g., 'if pain is above 4/10 during a run, stop'). Do not assume they will self-manage conservatively.",
+          "follow_ups": []
+        },
+        {
+          "id": "injury.Q4",
+          "text": "Do you notice any difference between how your left and right side feel when you run — even minor things?",
+          "type": "open",
+          "surfaces": "Unilateral asymmetry / compensatory patterns. Often predates a formal injury by weeks.",
+          "coaching_implication": "Positive answer → flag for GCT asymmetry monitoring in Garmin data. Recommend single-leg strength assessment.",
+          "follow_ups": []
+        },
+        {
+          "id": "injury.Q5",
+          "text": "Have you had any surgery on your legs, hips, or feet — including anything not running-related?",
+          "type": "open",
+          "surfaces": "Structural changes from surgery (ACL, hip labrum, foot procedures) that affect biomechanics and load tolerance.",
+          "coaching_implication": "ACL → quad strength asymmetry likely, rate-of-loading management. Hip labrum → avoid aggressive hip flexor work.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "experience": {
+      "order": 5,
+      "description": "Training experience depth. Current mileage is known from Garmin — this captures tissue age, coaching history, and adherence patterns.",
+      "questions": [
+        {
+          "id": "experience.Q1",
+          "text": "How many years have you been running with some real consistency — not counting gaps of more than a few months?",
+          "type": "open",
+          "surfaces": "Connective tissue age. 2+ years of continuous running = meaningfully adapted tendons/bones. Under 2 years = treat as relative beginner structurally regardless of current fitness.",
+          "coaching_implication": "Under 2 years → conservative injury protocols, longer base phase, cap mileage increases. 5+ years → can tolerate more volume variation, faster fitness recovery from breaks.",
+          "follow_ups": [
+            {
+              "condition": "mentions significant gap (3+ months) in recent history",
+              "question": "When was the most recent time you had a long break from running, and how long was it?",
+              "surfaces": "Recent detraining. Cardiovascular fitness returns in 4-8 weeks; connective tissue tolerance takes longer. Recent returners need conservative load progression regardless of how fit they feel."
+            }
+          ]
+        },
+        {
+          "id": "experience.Q2",
+          "text": "Have you ever followed a structured training plan — like Hal Higdon, Jack Daniels, 80/20 running? How did it go?",
+          "type": "open",
+          "surfaces": "Readiness for structured training. Past positive experience → structured plan appropriate. Past frustration/abandonment → explore why (too rigid? too much? confusing?).",
+          "coaching_implication": "Never used a plan → start with simpler structure, build plan literacy. Bad experience with plans → identify specific failure points and design around them.",
+          "follow_ups": []
+        },
+        {
+          "id": "experience.Q3",
+          "text": "When you've tried to follow a plan before, how closely did you actually stick to it — and what usually caused you to go off-script?",
+          "type": "open",
+          "surfaces": "Adherence pattern and its causes. Life interference vs. boredom vs. injury vs. performance anxiety cause very different problems and need different solutions.",
+          "coaching_implication": "Life interference → flexible plan structure with makeup options. Boredom → variety in workout types. Injury → injury prevention emphasis upfront. Rigid adherence → flexibility coaching (missed day ≠ failed plan).",
+          "follow_ups": []
+        },
+        {
+          "id": "experience.Q4",
+          "text": "How many races have you done? What's the furthest distance you've raced, and roughly what was your time?",
+          "type": "open",
+          "surfaces": "Race experience level and approximate VDOT baseline to cross-reference against Garmin data. Also surfaces whether they have a race-pace schema.",
+          "coaching_implication": "No race experience → race simulation in training needed. VDOT from stated race time can be compared to data-derived VDOT estimate.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "lifestyle": {
+      "order": 6,
+      "description": "Life context and training load tolerance. What's the training ceiling given their actual life?",
+      "questions": [
+        {
+          "id": "lifestyle.Q1",
+          "text": "On a totally normal week with nothing unusual going on — how many times could you realistically get out the door to run?",
+          "type": "open",
+          "surfaces": "Realistic training frequency ceiling. The gap between this and their current frequency reveals schedule pressure.",
+          "coaching_implication": "Stated ceiling < 4 runs/week → plan design around that max. Never exceed stated ceiling in plan prescriptions.",
+          "follow_ups": []
+        },
+        {
+          "id": "lifestyle.Q2",
+          "text": "What time of day do you usually run? Is that slot reliably available, or does it often get displaced by other things?",
+          "type": "open",
+          "surfaces": "Schedule reliability. Morning runs are more reliable than evening runs for most people (fewer competing demands).",
+          "coaching_implication": "Unreliable slot → recommend shifting to more reliable time, or design plans with flexible timing.",
+          "follow_ups": []
+        },
+        {
+          "id": "lifestyle.Q3",
+          "text": "How would you describe your stress level outside of running right now — and is it pretty steady or does it spike unpredictably?",
+          "type": "open",
+          "surfaces": "Allostatic load level and predictability. High but predictable stress is more manageable than unpredictable spikes.",
+          "coaching_implication": "High chronic stress → lower training ceiling, more sleep/recovery emphasis. Unpredictable spikes → flexible plan, clear protocols for high-stress weeks.",
+          "follow_ups": []
+        },
+        {
+          "id": "lifestyle.Q4",
+          "text": "On a typical night, how many hours of sleep do you get — and does that feel like enough?",
+          "type": "open",
+          "surfaces": "Sleep quantity AND quality (the 'feel like enough' addition surfaces sleep quality separately from hours).",
+          "coaching_implication": "Under 7 hours → active sleep coaching, link sleep to Body Battery and training adaptation. 7+ hours but 'doesn't feel like enough' → sleep quality issue (fragmentation, stress, alcohol).",
+          "follow_ups": []
+        },
+        {
+          "id": "lifestyle.Q5",
+          "text": "Are there periods of the year — work deadlines, family, travel — when consistent training becomes genuinely difficult?",
+          "type": "open",
+          "surfaces": "Predictable disruption periods. Allows proactive plan modifications for known hard periods.",
+          "coaching_implication": "Flag identified periods in plan design. Reduce targets 2-3 weeks before known disruptions. Use disruption periods for deload rather than fighting them.",
+          "follow_ups": []
+        },
+        {
+          "id": "lifestyle.Q6",
+          "text": "When life gets busy, are you more likely to skip runs entirely or squeeze in shorter versions?",
+          "type": "multiple_choice",
+          "options": ["Skip entirely — if I can't do the full thing, I'd rather rest", "Squeeze in shorter versions — something is better than nothing", "Depends on how tired I am", "I rarely miss runs regardless of life stress"],
+          "surfaces": "Adherence style under pressure. Skippers need explicit permission to do partial workouts. Non-skippers (always train) need overtraining warning protocols.",
+          "coaching_implication": "Always trains regardless → watch for overtraining signals, introduce mandatory rest days. Skips entirely → frame partial workouts as valid, lower the threshold for 'a good run'.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "calibration": {
+      "order": 7,
+      "description": "Subjective effort calibration. Surfaces mismatch between how runs feel and what the data shows. Critical for setting correct training zones.",
+      "questions": [
+        {
+          "id": "calibration.Q1",
+          "text": "When you go out for what you'd call an easy run, what does it actually feel like? Could you hold a full phone conversation the whole time?",
+          "type": "open",
+          "surfaces": "Easy pace schema. Most recreational runners' 'easy' is Zone 3. Garmin data will confirm or contradict — this question primes the conversation.",
+          "coaching_implication": "If Garmin data shows avg HR >75% max on 'easy' days AND they say 'yes totally conversational' → they have high HR for perceived effort (fitness issue, not calibration). If they say 'actually it's pretty steady' → miscalibrated, needs Zone 2 retraining.",
+          "follow_ups": []
+        },
+        {
+          "id": "calibration.Q2",
+          "text": "Have you ever felt like you were running slow enough to feel a bit embarrassed by your pace — like, actually self-conscious about it?",
+          "type": "open",
+          "surfaces": "Pace shame as a blocker to Zone 2 running. Very common, directly prevents the most important training adaptation. Also surfaces social context of running.",
+          "coaching_implication": "Yes → proactively normalize slow paces, use 'effort-based' not 'pace-based' language, consider HR-only watch face recommendation.",
+          "follow_ups": []
+        },
+        {
+          "id": "calibration.Q3",
+          "text": "When you do a workout you'd call hard — intervals, a tempo run, or a hard effort — roughly how long could you sustain that effort if you absolutely had to? 20 minutes? An hour? More?",
+          "type": "open",
+          "surfaces": "Hard effort schema. 'I could go forever at that pace' = easy pace misclassified as hard. '20 minutes tops' = likely threshold. '5 minutes' = likely VO2max territory.",
+          "coaching_implication": "Cross-reference with Garmin HR during stated hard efforts. Misclassification in either direction needs correction before prescribing specific workout zones.",
+          "follow_ups": []
+        },
+        {
+          "id": "calibration.Q4",
+          "text": "Do you tend to finish your long runs with something left in the tank, or do you usually feel properly spent at the end?",
+          "type": "multiple_choice",
+          "options": ["Always have something left — I could go further", "Usually about right — pleasantly tired", "Often quite spent — sometimes wrecked", "Varies a lot"],
+          "surfaces": "Long run intensity calibration. 'Properly spent' on easy long runs = running too hard. Also flags potential overreaching pattern.",
+          "coaching_implication": "Often spent → long runs too fast, explicit pace cap needed. Always have lots left → may be under-training long run distance.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "training_preferences": {
+      "order": 8,
+      "description": "Training style and preferences. Shapes how plans are communicated and what variety is appropriate.",
+      "questions": [
+        {
+          "id": "prefs.Q1",
+          "text": "Do you prefer having a structured plan telling you exactly what to do each day, or do you like more flexibility to run by feel?",
+          "type": "scale_1_5",
+          "scale_labels": {"1": "Full flexibility — I like to decide day-of what feels right", "5": "Full structure — tell me exactly what to do and I'll do it"},
+          "surfaces": "Structure preference. Directly shapes plan design.",
+          "coaching_implication": "High structure (4-5): detailed daily prescriptions, specific paces and distances. Low structure (1-2): weekly targets with daily flexibility, effort-based rather than pace-based guidance.",
+          "follow_ups": []
+        },
+        {
+          "id": "prefs.Q2",
+          "text": "When a coach or trainer gives you feedback, do you prefer it straight and direct, or do you want context and explanation first?",
+          "type": "multiple_choice",
+          "options": ["Direct — just tell me what to do or change", "Context first — I want to understand why before I change anything", "Depends on what it is", "I've never really worked with a coach before"],
+          "surfaces": "Feedback style preference. AI coach communication style should adapt.",
+          "coaching_implication": "Direct → lead with recommendations, explanation optional. Context-first → always explain rationale, cite data. 'Never had a coach' → establish coaching relationship expectations.",
+          "follow_ups": []
+        },
+        {
+          "id": "prefs.Q3",
+          "text": "Are you more motivated by understanding the science behind your training, or do you mostly just want to know what to do?",
+          "type": "multiple_choice",
+          "options": ["Science — I want to understand the physiology", "Just tell me what to do", "A bit of both"],
+          "surfaces": "Information depth preference. Shapes how much explanation the coach provides.",
+          "coaching_implication": "Science-curious → use knowledge base references, explain mechanisms. Just instructions → keep recommendations actionable and brief.",
+          "follow_ups": []
+        },
+        {
+          "id": "prefs.Q4",
+          "text": "Do you prefer running outdoors, on a treadmill, or a mix — and does that change by season?",
+          "type": "open",
+          "surfaces": "Training environment. Affects weather-adjustment recommendations, treadmill vs outdoor pace equivalence.",
+          "coaching_implication": "Treadmill-primary → explain pace equivalence (treadmill typically 0-15 sec/km faster at same effort). Seasonal shift → proactive planning around seasonal transitions.",
+          "follow_ups": []
+        }
+      ]
+    },
+
+    "sensitive": {
+      "order": 9,
+      "description": "Sensitive topics: relationship with rest, food/weight, and coaching permission. Placed last — requires trust built in prior sections.",
+      "questions": [
+        {
+          "id": "sensitive.Q1",
+          "text": "How do you feel on a rest day when you're supposed to take it easy but your body feels fine and you want to run?",
+          "type": "open",
+          "surfaces": "Relationship with rest. Anxiety, guilt, or compulsion on rest days is a red flag for exercise dependence and overtraining risk.",
+          "coaching_implication": "High anxiety → explicit rest day framing as 'active recovery investment', discuss adaptation physiology, may need to monitor for exercise compulsion pattern.",
+          "follow_ups": []
+        },
+        {
+          "id": "sensitive.Q2",
+          "text": "Do you use running to manage your weight, your stress, your mood — or is it mainly about the running itself?",
+          "type": "open",
+          "surfaces": "External motivation and potential RED-S risk. Weight management as primary driver is a risk factor for under-fueling.",
+          "coaching_implication": "Weight management prominent → probe nutrition gently, watch for RED-S metric signatures in Garmin data (rising HR at same pace, declining AE, poor Body Battery recovery).",
+          "follow_ups": [
+            {
+              "condition": "weight management mentioned",
+              "question": "Do you have any dietary goals you're working on alongside your running — like eating differently to support training?",
+              "surfaces": "Restriction vs. performance nutrition orientation. Indirect approach avoids triggering defensive responses."
+            }
+          ]
+        },
+        {
+          "id": "sensitive.Q3",
+          "text": "Have there been periods when running felt really good and sustainable — when everything clicked? What made that work?",
+          "type": "open",
+          "surfaces": "Positive reference state. Reveals conditions for success (accountability, specific plan, season, life circumstances). Highly actionable.",
+          "coaching_implication": "Recreate the conditions they describe. If they don't have a positive reference → this is the first time they'll build one, frame accordingly.",
+          "follow_ups": []
+        },
+        {
+          "id": "sensitive.Q0",
+          "text": "Imagine you had a serious injury and couldn't run for 6 months. Walk me through how that would actually affect your life.",
+          "type": "open",
+          "surfaces": "Where running sits in the athlete's identity and coping architecture. Casual 'oh I'd be sad but fine' = healthy relationship. Catastrophic response = running is primary emotional regulation, rest anxiety likely, exercise dependence risk. This is the single best question for revealing psychological dependence on training.",
+          "coaching_implication": "Catastrophic response → treat rest days as a coaching topic, not an afterthought. Build explicit recovery framing. Monitor for compulsive training patterns in Garmin data (runs on days with very low Body Battery, no rest days in weeks of data).",
+          "follow_ups": []
+        },
+        {
+          "id": "sensitive.Q4",
+          "text": "And on the other side — have you tried to make running a consistent habit before and had it fall apart? What typically ends it?",
+          "type": "open",
+          "surfaces": "Historical failure patterns. Most informative adherence question. Directly shapes plan design to avoid known failure modes.",
+          "coaching_implication": "Injury → injury prevention upfront. Life disruption → flexible plan. Motivation loss → engagement check-ins, milestone markers. Overtraining → build in mandatory cutback weeks.",
+          "follow_ups": []
+        }
+      ]
+    }
+  },
+
+  "red_flags": {
+    "description": "Answers that should immediately change coaching posture. Check these after onboarding completes.",
+    "flags": [
+      {
+        "id": "rf_stress_fracture",
+        "trigger": "Stress fracture in injury history",
+        "questions_to_watch": ["injury.Q1"],
+        "action": "Apply conservative bone loading protocol. Check nutrition (calcium, Vitamin D). Cap weekly mileage increases at 5% not 10%. Flag if female + high training volume + weight management motivation (RED-S triad)."
+      },
+      {
+        "id": "rf_multiple_injuries",
+        "trigger": "3+ distinct injury types in past 2 years",
+        "questions_to_watch": ["injury.Q1"],
+        "action": "Likely systemic underfueling or overtraining. Before prescribing training, investigate nutrition and recovery quality. Look for RED-S metric pattern in Garmin data."
+      },
+      {
+        "id": "rf_reds_pattern",
+        "trigger": "Weight management motivation + restrictive eating language + multiple injuries",
+        "questions_to_watch": ["sensitive.Q2", "injury.Q1"],
+        "action": "High RED-S risk. Monitor AE trend and resting HR trend closely. Frame all nutrition guidance around performance, not weight. Recommend sports dietitian consultation."
+      },
+      {
+        "id": "rf_rest_anxiety",
+        "trigger": "High anxiety or guilt on rest days, describes inability to take rest",
+        "questions_to_watch": ["sensitive.Q1"],
+        "action": "Exercise dependence pattern. Build explicit recovery rationale into every rest day recommendation. Monitor for ACWR spikes. May need to cap training frequency."
+      },
+      {
+        "id": "rf_always_pushes_through",
+        "trigger": "Explicitly states they push through pain or ignore medical advice",
+        "questions_to_watch": ["injury.Q2", "injury.Q3"],
+        "action": "Set explicit pain threshold rules upfront: pain above 4/10 during a run = stop. Do not rely on self-management — be directive."
+      },
+      {
+        "id": "rf_unrealistic_goal",
+        "trigger": "Race goal implies VDOT significantly above current data-derived estimate (>10%)",
+        "questions_to_watch": ["goals.Q1"],
+        "action": "Present data-based prediction honestly. Offer intermediate goal race. Explain what training would be required to close the gap. Do not validate an impossible timeline."
+      },
+      {
+        "id": "rf_current_pain",
+        "trigger": "Describes current pain they 'run through' or are 'managing'",
+        "questions_to_watch": ["injury.Q2"],
+        "action": "Treat as active injury. Do not prescribe increasing load. Recommend evaluation. Monitor relevant Garmin metrics (GCT asymmetry, cadence changes) for compensation patterns."
+      },
+      {
+        "id": "rf_overtraining",
+        "trigger": "Feels fitness is going backward despite consistent training, or mentions persistent fatigue, mood changes, frequent illness",
+        "screening_question": "Over the past few months, have you felt like your fitness is going backward even though you're training consistently — like working hard but not improving?",
+        "questions_to_watch": ["lifestyle.Q3", "sensitive.Q1"],
+        "action": "Cross-reference Garmin AE trend and Body Battery trend. If data confirms declining AE with consistent mileage, this is functional overreaching. First coaching priority is recovery, not fitness building. Reduce load 20-30% for 2 weeks before reassessing."
+      },
+      {
+        "id": "rf_sleep_restoration",
+        "trigger": "Gets adequate sleep hours but doesn't feel restored, or partner reports snoring/stopped breathing",
+        "screening_question": "Even when you get enough sleep, do you wake up still feeling tired — like sleep isn't really restoring you? Does your partner ever mention snoring or anything like that?",
+        "questions_to_watch": ["lifestyle.Q4"],
+        "action": "Possible undiagnosed sleep apnea. This explains poor Body Battery despite adequate sleep duration. Recommend sleep study evaluation — this is a medical referral, not a coaching fix. Do not increase training load until sleep quality is addressed."
+      },
+      {
+        "id": "rf_menstrual_disruption",
+        "trigger": "Female athlete with bone stress history, high training volume, or underfueling signals",
+        "screening_question": "For women — has your period been consistent lately, or has it become irregular or stopped? I ask because it's actually one of the most reliable signals about whether the body is handling training load well.",
+        "questions_to_watch": ["injury.Q1", "sensitive.Q2"],
+        "action": "Absent or severely irregular period in a training female athlete = RED-S until proven otherwise. Mandatory medical referral before any training load increase. Frame to athlete as a performance and health prerequisite, not a gynaecological issue."
+      },
+      {
+        "id": "rf_goal_gap",
+        "trigger": "Stated race goal implies VDOT significantly above current data estimate (>8-10%)",
+        "questions_to_watch": ["goals.Q1", "goals.Q2b"],
+        "action": "Present data-based prediction honestly at end of onboarding: 'Your data suggests X — here's what it would take to reach Y timeline.' Offer intermediate goal race. Do not validate an unsafe training timeline. Explore importance/confidence gap — if confidence is already low, they may already sense the disconnect."
+      }
+    ]
+  },
+
+  "transition_language": {
+    "description": "Natural bridges between question categories. Makes conversation feel like a dialogue, not a form.",
+    "opening_to_injury": "I've had a look through your Garmin data already and I have some thoughts — but before I share them, I want to understand your body a bit better. Have you had any injuries or recurring issues I should know about?",
+    "injury_to_experience": "Got it. Now I want to understand how you got here — tell me a bit about your training history.",
+    "experience_to_lifestyle": "This is one of the questions people sometimes find surprising coming from a running coach, but it's probably the most important thing I'll ask: what does life outside running look like right now?",
+    "lifestyle_to_calibration": "I want to shift to something more qualitative for a minute. Tell me about what running actually feels like for you — not the goals, just the experience.",
+    "calibration_to_preferences": "Last few things before I share what I'm seeing in your data and we figure out where to go from here.",
+    "close_onboarding": "Okay — I've got a good picture now. Let me tell you what I'm seeing in your data and what I think it means for where we start."
+  },
+
+  "system_prompt_injection": {
+    "description": "After onboarding completes, this summary is added to the coach system prompt for the session.",
+    "template": "ATHLETE PROFILE (from onboarding intake):\n- Why they came: {opening.Q1}\n- Primary goal: {goals.Q1}\n- Injury history: {injury.Q1} | Current issues: {injury.Q2}\n- Experience: {experience.Q1} | Race history: {experience.Q4}\n- Training frequency ceiling: {lifestyle.Q1} | Sleep: {lifestyle.Q4}\n- Life stress level: {lifestyle.Q3}\n- Motivation type: {identity.Q2}\n- Structure preference (1-5): {prefs.Q1}\n- Feedback style: {prefs.Q2}\n- RPE calibration note: {calibration.Q1}\n- Red flags active: {red_flags_triggered}\n\nUse this profile to personalize all coaching responses. Reference specific answers when relevant. Never ask for information already provided in this profile."
+  }
+}
