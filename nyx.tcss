@@ -1,0 +1,84 @@
+Screen {
+    background: #050914;
+    color: #e7efff;
+}
+
+Header {
+    background: #0b1323;
+    color: #e7efff;
+}
+
+Footer {
+    background: #0b1323;
+    color: #9fb3d1;
+}
+
+TabbedContent {
+    background: #050914;
+}
+
+TabPane {
+    padding: 0 1;
+}
+
+.hero {
+    margin: 1 2 0 2;
+    height: auto;
+}
+
+#home-actions, #diag-actions, #chat-input-row {
+    margin: 1 2 0 2;
+    height: auto;
+}
+
+#home-panels {
+    margin: 0 1 1 1;
+    height: auto;
+}
+
+#overview-panel, #setup-panel {
+    width: 1fr;
+}
+
+.panel {
+    margin: 1 2 0 2;
+    padding: 0;
+    height: auto;
+}
+
+.action {
+    min-width: 18;
+    margin-right: 1;
+}
+
+RichLog {
+    margin: 1 2;
+    border: round #2b4364;
+    background: #09111f;
+    color: #e7efff;
+    height: 1fr;
+}
+
+#chat_prompt {
+    width: 1fr;
+}
+
+#send_chat, #clear_chat {
+    width: 14;
+    margin-left: 1;
+}
+
+Button.-primary {
+    background: #4d74ff;
+    color: white;
+}
+
+Button {
+    background: #14233b;
+    color: #d8e6ff;
+    border: tall #2b4364;
+}
+
+Button:hover {
+    background: #1b2e4c;
+}

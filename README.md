@@ -6,6 +6,12 @@ It pulls Garmin run history into a local SQLite database, computes training metr
 
 This is a developer harness, not the final user-facing product UI.
 
+If you want the friendly launcher instead of the raw CLI, start with:
+
+```bash
+python3 nyx.py
+```
+
 ## What Nyx Does
 
 - Syncs Garmin running activities into `garmin_data.db`
@@ -66,27 +72,26 @@ If Garmin or Anthropic dependencies are missing, `doctor` will tell you exactly 
 Recommended first-run flow:
 
 ```bash
-python3 cli.py doctor
-python3 cli.py sync
-python3 cli.py onboarding --full
-python3 cli.py vdot
-python3 cli.py status
-python3 cli.py eval
-python3 coach.py
+python3 nyx.py
 ```
 
 What to expect:
 
+- Nyx opens a Textual app with Home, Athlete, Coach, Diagnostics, and About tabs.
+- You can sync Garmin, run onboarding, refresh VDOT/HR zones, and run diagnostics from the app.
 - The first `sync` will prompt you for Garmin credentials if there is no token cache yet.
 - Garmin tokens are stored locally in `.garmin_tokens/`.
 - Your local athlete data is stored in `garmin_data.db`.
 - `build_kb.py` creates the local knowledge index in `chroma_db/`.
+
+If you prefer the raw terminal flow, the older CLI commands still work.
 
 ## Core Commands
 
 ### Data and Metrics
 
 ```bash
+python3 nyx.py
 python3 cli.py sync
 python3 cli.py report --n 20
 python3 cli.py inspect <activity_id>
@@ -153,6 +158,8 @@ python3 coach.py
 ## Files and Directories
 
 - `cli.py`: main command surface
+- `nyx.py`: Textual launcher and friendly harness UI
+- `nyx.tcss`: Nyx UI styling
 - `coach.py`: coach runtime and prompt assembly
 - `store.py`: SQLite schema, migrations, and metadata persistence
 - `vdot_zones.py`: VDOT estimation and HR zones
