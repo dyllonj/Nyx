@@ -4,7 +4,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -40,7 +39,7 @@ export function AppFrame({
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={[styles.root, wide && styles.rootWide]}>
+      <View style={wide ? { ...styles.root, ...styles.rootWide } : styles.root}>
         {wide ? <NavigationRail pathname={pathname} /> : null}
         <View style={styles.main}>
           <View style={styles.header}>
@@ -49,7 +48,14 @@ export function AppFrame({
               <Text style={styles.headerSubtitle}>{subtitle}</Text>
             </View>
             {actionLabel && onActionPress ? (
-              <Pressable onPress={onActionPress} style={({ pressed }) => [styles.primaryAction, pressed && styles.primaryActionPressed]}>
+              <Pressable
+                onPress={onActionPress}
+                style={({ pressed }) =>
+                  pressed
+                    ? { ...styles.primaryAction, ...styles.primaryActionPressed }
+                    : styles.primaryAction
+                }
+              >
                 <Text style={styles.primaryActionText}>{actionLabel}</Text>
               </Pressable>
             ) : null}
@@ -73,8 +79,14 @@ function NavigationRail({ pathname }: { pathname: string }) {
           const active = pathname === item.href;
           return (
             <Link href={item.href as any} key={item.href} asChild>
-              <Pressable style={[styles.navItem, active && styles.navItemActive]}>
-                <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
+              <Pressable
+                style={active ? { ...styles.navItem, ...styles.navItemActive } : styles.navItem}
+              >
+                <Text
+                  style={active ? { ...styles.navLabel, ...styles.navLabelActive } : styles.navLabel}
+                >
+                  {item.label}
+                </Text>
               </Pressable>
             </Link>
           );
@@ -92,7 +104,15 @@ function BottomNavigation({ pathname }: { pathname: string }) {
         return (
           <Link href={item.href as any} key={item.href} asChild>
             <Pressable style={styles.bottomItem}>
-              <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{item.label}</Text>
+              <Text
+                style={
+                  active
+                    ? { ...styles.bottomLabel, ...styles.bottomLabelActive }
+                    : styles.bottomLabel
+                }
+              >
+                {item.label}
+              </Text>
             </Pressable>
           </Link>
         );
@@ -101,7 +121,7 @@ function BottomNavigation({ pathname }: { pathname: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = {
   safe: {
     backgroundColor: theme.colors.bg,
     flex: 1,
@@ -111,7 +131,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rootWide: {
-    flexDirection: "row",
+    flexDirection: "row" as const,
   },
   rail: {
     borderRightColor: theme.colors.borderSubtle,
@@ -132,7 +152,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.mono,
     fontSize: 12,
     letterSpacing: 1.2,
-    textTransform: "uppercase",
+    textTransform: "uppercase" as const,
   },
   navList: {
     gap: 8,
@@ -161,12 +181,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    alignItems: "flex-start",
+    alignItems: "flex-start" as const,
     borderBottomColor: theme.colors.borderSubtle,
     borderBottomWidth: 1,
-    flexDirection: "row",
+    flexDirection: "row" as const,
     gap: theme.spacing.lg,
-    justifyContent: "space-between",
+    justifyContent: "space-between" as const,
     paddingHorizontal: theme.spacing.xl,
     paddingVertical: theme.spacing.xl,
   },
@@ -188,10 +208,10 @@ const styles = StyleSheet.create({
     maxWidth: 720,
   },
   primaryAction: {
-    alignItems: "center",
+    alignItems: "center" as const,
     backgroundColor: theme.colors.actionPrimaryBg,
     borderRadius: theme.radius.pill,
-    justifyContent: "center",
+    justifyContent: "center" as const,
     minHeight: 48,
     minWidth: 144,
     paddingHorizontal: 18,
@@ -204,10 +224,10 @@ const styles = StyleSheet.create({
     color: theme.colors.actionPrimaryText,
     fontFamily: theme.fonts.body,
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "600" as const,
   },
   content: {
-    alignSelf: "center",
+    alignSelf: "center" as const,
     gap: theme.spacing.lg,
     maxWidth: 1120,
     paddingHorizontal: theme.spacing.xl,
@@ -219,15 +239,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface1,
     borderTopColor: theme.colors.borderSubtle,
     borderTopWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-around",
+    flexDirection: "row" as const,
+    justifyContent: "space-around" as const,
     paddingBottom: theme.spacing.md,
     paddingTop: theme.spacing.sm,
   },
   bottomItem: {
-    alignItems: "center",
+    alignItems: "center" as const,
     minHeight: 48,
-    justifyContent: "center",
+    justifyContent: "center" as const,
     paddingHorizontal: 10,
   },
   bottomLabel: {
@@ -235,9 +255,9 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.mono,
     fontSize: 12,
     letterSpacing: 0.8,
-    textTransform: "uppercase",
+    textTransform: "uppercase" as const,
   },
   bottomLabelActive: {
     color: theme.colors.textPrimary,
   },
-});
+};

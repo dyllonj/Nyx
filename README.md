@@ -57,7 +57,25 @@ The FastAPI server (`server.py`) exposes:
 
 ## Quick Start
 
-### Web app (preferred)
+### Web app via tmux (persistent — survives SSH disconnect)
+
+Start both services in named tmux sessions so they keep running after you close your terminal:
+
+```bash
+# Backend — binds to all interfaces so Tailscale can reach it
+tmux new-session -d -s nyx-backend
+tmux send-keys -t nyx-backend \
+  "cd ~/Work/Nyx && MOONSHOT_API_KEY=<your-key> .venv/bin/python -m uvicorn server:app --host 0.0.0.0 --port 8000" Enter
+
+# Frontend — set API base URL to backend's Tailscale/LAN IP
+tmux new-session -d -s nyx-frontend
+tmux send-keys -t nyx-frontend \
+  "cd ~/Work/Nyx/apps/nyx-client && EXPO_PUBLIC_API_BASE_URL=http://<tailscale-ip>:8000 npx expo start --web --port 8081 --host lan" Enter
+```
+
+Access at `http://<tailscale-ip>:8081`. To reattach: `tmux attach -t nyx-backend` or `tmux attach -t nyx-frontend`.
+
+### Web app (local dev, two terminals)
 
 ```bash
 # Terminal 1: backend
