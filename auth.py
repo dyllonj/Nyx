@@ -5,7 +5,12 @@ import config
 from errors import DependencyError, HarnessError
 
 
-def get_client():
+def get_client(
+    *,
+    email: str | None = None,
+    password: str | None = None,
+    interactive: bool = True,
+):
     """Return an authenticated Garmin client.
     Tokens are stored in TOKENSTORE_DIR and reused on subsequent calls.
     First run prompts for credentials; after that, fully silent.
@@ -36,10 +41,18 @@ def get_client():
             details=str(e),
         ) from e
 
-    # First-time or expired: prompt for credentials
-    print("Garmin Connect login required.")
-    email = input("Email: ").strip()
-    password = getpass.getpass("Password: ")
+    # First-time or expired: credentials required
+    if not email or not password:
+        if not interactive:
+            raise HarnessError(
+                "garmin_login_required",
+                "Garmin login is required before sync can continue.",
+                hint="Provide Garmin credentials in the UI, or run sync once from the terminal to create a token cache.",
+            )
+
+        print("Garmin Connect login required.")
+        email = input("Email: ").strip()
+        password = getpass.getpass("Password: ")
 
     try:
         client = Garmin(email=email, password=password)
