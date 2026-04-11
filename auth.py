@@ -17,7 +17,11 @@ def get_client(
     First run prompts for credentials; after that, fully silent.
     """
     try:
-        from garminconnect import Garmin, GarminConnectAuthenticationError
+        from garminconnect import (
+            Garmin,
+            GarminConnectAuthenticationError,
+            GarminConnectConnectionError,
+        )
     except ImportError as e:
         raise DependencyError(
             "missing_garmin_dependency",
@@ -78,13 +82,17 @@ def get_client(
 
         client = Garmin(**garmin_kwargs)
         client.login(tokenstore=config.TOKENSTORE_DIR)
-    except GarminConnectAuthenticationError as e:
+    except (GarminConnectAuthenticationError, GarminConnectConnectionError) as e:
         details = str(e)
-        if "429" in details or "Cloudflare" in details:
+        if "429" in details or "Cloudflare" in details or isinstance(e, GarminConnectConnectionError):
             raise HarnessError(
                 "garmin_rate_limited",
-                "Garmin Connect is rate-limiting or blocking this login attempt.",
-                hint="Wait before retrying. Repeated login attempts can extend the block. If you already created tokens with python-garminconnect, Nyx can also reuse ~/.garminconnect.",
+                "Garmin Connect is rate-limiting or blocking all login strategies.",
+                hint=(
+                    "All login strategies failed. This is a known Garmin SSO issue (cyberjunky/python-garminconnect#344). "
+                    "Wait 15–30 minutes before retrying. If you have tokens from a working machine, "
+                    "copy them to ~/.garminconnect or set the GARMINTOKENS env var."
+                ),
                 details=details,
             ) from e
         raise HarnessError(

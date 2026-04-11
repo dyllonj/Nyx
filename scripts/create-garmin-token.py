@@ -3,7 +3,7 @@ import argparse
 import getpass
 from pathlib import Path
 
-from garminconnect import Garmin, GarminConnectAuthenticationError
+from garminconnect import Garmin, GarminConnectAuthenticationError, GarminConnectConnectionError
 
 
 def main() -> int:
@@ -42,8 +42,13 @@ def main() -> int:
             prompt_mfa=lambda: input("MFA code: ").strip(),
         )
         client.login(tokenstore=str(tokenstore))
-    except GarminConnectAuthenticationError as exc:
-        print(f"Garmin authentication failed: {exc}")
+    except (GarminConnectAuthenticationError, GarminConnectConnectionError) as exc:
+        details = str(exc)
+        if "429" in details or isinstance(exc, GarminConnectConnectionError):
+            print(f"Garmin rate-limited — all strategies failed: {exc}")
+            print("Wait 15–30 min and retry. Known upstream issue: cyberjunky/python-garminconnect#344")
+        else:
+            print(f"Garmin authentication failed: {exc}")
         return 1
 
     print(f"Saved Garmin tokens to: {tokenfile}")

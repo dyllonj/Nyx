@@ -102,25 +102,35 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-2. Set your Anthropic API key.
+2. Create your Garmin token.
+
+Run this once. It prompts for your Garmin Connect email and password, handles MFA if your account uses it, and saves tokens to `~/.garminconnect/`. Nyx reuses them automatically on every subsequent sync — you won't need to log in again unless your tokens expire.
+
+```bash
+python3 scripts/create-garmin-token.py
+```
+
+Tokens are saved to `~/.garminconnect/garmin_tokens.json` by default. To use a custom location, pass `--tokenstore <path>` and set `GARMINTOKENS=<path>` in your environment.
+
+3. Set your Anthropic API key.
 
 ```bash
 export ANTHROPIC_API_KEY=your_key_here
 ```
 
-3. Build the local knowledge base.
+4. Build the local knowledge base.
 
 ```bash
 python3 build_kb.py
 ```
 
-4. Run a health check.
+5. Run a health check.
 
 ```bash
 python3 cli.py doctor
 ```
 
-5. Install and start the web client.
+6. Install and start the web client.
 
 ```bash
 cd apps/nyx-client
@@ -182,6 +192,15 @@ npm install
 ```bash
 pip install -r requirements.txt
 ```
+
+### Garmin rate limiting / "all strategies failed"
+
+Garmin's SSO endpoints aggressively rate-limit login attempts on a per-account basis — changing your IP or user-agent does not help. If `create-garmin-token.py` prints "rate-limited" or "all strategies failed":
+
+1. **Wait 15–30 minutes** before retrying. Repeated attempts extend the block.
+2. Retry: `python3 scripts/create-garmin-token.py`
+
+Nyx ships with a patched version of `python-garminconnect` that adds a widget-based login strategy (`/sso/embed`) which bypasses the rate-limited endpoints. If you consistently can't authenticate, it's a temporary Garmin server-side block — patience is the fix.
 
 ### Coach or live evals need an API key
 
