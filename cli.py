@@ -21,6 +21,7 @@ import metrics
 import models
 import onboarding
 import store
+import sync_engine
 import vdot_zones
 from errors import HarnessError, format_error
 
@@ -28,126 +29,11 @@ from errors import HarnessError, format_error
 # ─── sync ────────────────────────────────────────────────────────────────────
 
 def cmd_sync(args):
-    import auth
-    import fetch
-
-    conn = store.open_db()
-    store.mark_sync_started(conn)
-
     try:
-        client = auth.get_client()
-        start_date = store.get_sync_start_date(conn)
-
-        # 1. Fetch running activities since the watermark
-        activities = fetch.fetch_running_activities(client, start_date)
-        new_count = 0
-        for act in activities:
-            existing_row = store.get_run(conn, act["activityId"])
-            already_present = existing_row is not None
-            run = models.RunSummary.from_api_summary(act)
-            store.upsert_run(
-                conn,
-                run,
-                detail_fetched=bool(existing_row["detail_fetched"]) if existing_row else False,
-            )
-            if not already_present:
-                new_count += 1
-
-        print(f"Stored {new_count} new runs ({len(activities)} activities seen since watermark).")
-
-        # 2. Fetch details for any run that doesn't have them yet
-        pending = store.get_runs_without_details(conn)
-        detail_failures = 0
-        if not pending:
-            print("All runs already have detailed metrics.")
-        else:
-            print(f"Fetching details for {len(pending)} runs (this may take a while)...")
-
-        import datetime
-        for i, activity_id in enumerate(pending, 1):
-            row = store.get_run(conn, activity_id)
-            run = models.RunSummary(
-                activity_id=row["activity_id"],
-                name=row["name"] or "",
-                start_time=datetime.datetime.fromisoformat(row["start_time"]),
-                duration_sec=row["duration_sec"] or 0,
-                distance_m=row["distance_m"] or 0,
-                calories=row["calories"] or 0,
-                avg_hr=row["avg_hr"],
-                max_hr=row["max_hr"],
-                avg_speed_ms=row["avg_speed_ms"],
-                pace_min_per_km=row["pace_min_per_km"],
-            )
-
-            print(f"  [{i}/{len(pending)}] {run.start_time.date()} — {run.name[:40]}", end="\r", flush=True)
-
-            detail_fetched_ok = False
-            try:
-                detail = fetch.fetch_activity_detail(client, activity_id)
-                parsed = fetch.parse_detail_metrics(detail)
-                metrics.apply_detail_metrics(run, parsed)
-
-                splits = fetch.fetch_activity_splits(client, activity_id)
-                metrics.apply_split_metrics(run, splits)
-                store.upsert_laps(conn, activity_id, splits.get("lapDTOs", []))
-                detail_fetched_ok = True
-            except HarnessError as e:
-                detail_failures += 1
-                print(f"\n  Warning: could not fetch details for {activity_id}: {e.message}")
-            except Exception as e:
-                detail_failures += 1
-                print(f"\n  Warning: could not fetch details for {activity_id}: {e}")
-
-            # Compute REI without AE baseline on first pass (baseline not computed yet)
-            ae_baseline_str = store.get_meta(conn, "ae_baseline")
-            ae_baseline = float(ae_baseline_str) if ae_baseline_str else None
-            metrics.compute_all(run, ae_baseline)
-
-            store.upsert_run(conn, run, detail_fetched=detail_fetched_ok)
-
-        print()
-
-        # 3. Compute AE baseline and recompute all REI scores
-        print("Computing aerobic efficiency baseline...")
-        ae_baseline = store.compute_and_store_ae_baseline(conn)
-        if ae_baseline:
-            updated = store.recompute_all_rei(conn, ae_baseline)
-            print(f"AE baseline: {ae_baseline:.4f}  ({updated} REI scores updated)")
-        else:
-            print("Not enough qualifying runs to compute AE baseline yet.")
-
-        print("Estimating VDOT from run data...")
-        current_vdot = _meta_float(conn, "current_vdot")
-        if current_vdot is None:
-            current_vdot = vdot_zones.estimate_vdot_from_runs(conn)
-            qualifying_runs = store.get_meta(conn, "vdot_qualifying_run_count") or "0"
-            if current_vdot is None:
-                print("No qualifying runs yet for VDOT estimation.")
-            else:
-                print(f"Estimated VDOT: {current_vdot:.1f} (from {qualifying_runs} qualifying runs)")
-        else:
-            print(f"Current VDOT: {current_vdot:.1f} (existing estimate)")
-
-        try:
-            hr_zones = vdot_zones._refresh_hr_zones(conn)
-        except ValueError as e:
-            hr_zones = None
-            print(f"Unable to compute HR zones: {e}")
-
-        if current_vdot is not None and hr_zones:
-            print(f"Training paces computed. HR zones computed from max HR {hr_zones['max_hr']} bpm.")
-        elif current_vdot is not None:
-            print("Training paces computed.")
-        elif hr_zones:
-            print(f"HR zones computed from max HR {hr_zones['max_hr']} bpm.")
-
-        store.mark_sync_completed(conn, new_runs=new_count, detail_failures=detail_failures)
-        print("Sync complete.")
-    except HarnessError as e:
-        store.mark_sync_failed(conn, f"{e.code}: {e.message}")
+        sync_engine.run_sync(log=print, interactive=True)
+    except HarnessError:
         raise
     except Exception as e:
-        store.mark_sync_failed(conn, str(e))
         raise HarnessError(
             "sync_failed",
             "Sync failed unexpectedly.",
