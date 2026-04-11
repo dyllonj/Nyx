@@ -1,5 +1,7 @@
 .garmin_tokens/
 garmin_data.db
+exports/
+backups/
 rei_plot.png
 chroma_db/
 __pycache__/

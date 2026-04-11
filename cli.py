@@ -4,6 +4,8 @@ Garmin Run Efficiency Tracker
 
 Commands:
   sync              Pull all running data and compute metrics
+  export            Export local run data to JSON or CSV
+  backup            Snapshot the local SQLite database
   report [--n N]    Show recent runs with REI and trends
   inspect <id>      Full REI breakdown for one activity
   plot              Plot REI over time (requires matplotlib)
@@ -13,8 +15,10 @@ Commands:
   eval              Run offline or live golden-question evals
 """
 import argparse
+import datetime
 import sys
 
+import backup_utils
 import evals
 import health
 import metrics
@@ -298,6 +302,43 @@ def cmd_doctor(args):
     print(health.format_doctor(conn))
 
 
+def _parse_since_arg(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.datetime.fromisoformat(value)
+    except ValueError:
+        try:
+            return datetime.date.fromisoformat(value)
+        except ValueError as e:
+            raise HarnessError(
+                "invalid_since",
+                "The `--since` value must be an ISO date or datetime.",
+                hint="Use a value like `2026-04-01` or `2026-04-01T07:00:00`.",
+                details=str(e),
+            ) from e
+
+
+def cmd_export(args):
+    conn = store.open_db()
+    try:
+        output_path = backup_utils.export_runs(
+            conn,
+            format_name=args.format,
+            output_path=args.output,
+            since=_parse_since_arg(args.since),
+        )
+    finally:
+        conn.close()
+
+    print(f"Exported {args.format.upper()} data to {output_path}")
+
+
+def cmd_backup(args):
+    output_path = backup_utils.snapshot_database(output_path=args.output)
+    print(f"Backed up local DB to {output_path}")
+
+
 def cmd_eval(args):
     conn = store.open_db()
     offline_results = evals.run_offline_evals(conn)
@@ -338,6 +379,14 @@ def main():
 
     sub.add_parser("sync", help="Pull all running data and compute metrics")
 
+    exp = sub.add_parser("export", help="Export local run data to JSON or CSV")
+    exp.add_argument("--format", choices=["json", "csv"], default="json", help="Export format (default: json)")
+    exp.add_argument("--since", help="Only export runs on or after this ISO date/datetime")
+    exp.add_argument("--output", help="Output file path")
+
+    bak = sub.add_parser("backup", help="Snapshot the local SQLite database")
+    bak.add_argument("--output", help="Output backup file path")
+
     rep = sub.add_parser("report", help="Show recent runs with REI")
     rep.add_argument("--n", type=int, default=20, help="Number of runs to show (default 20)")
 
@@ -368,6 +417,10 @@ def main():
 
     if args.command == "sync":
         cmd_sync(args)
+    elif args.command == "export":
+        cmd_export(args)
+    elif args.command == "backup":
+        cmd_backup(args)
     elif args.command == "report":
         cmd_report(args)
     elif args.command == "inspect":

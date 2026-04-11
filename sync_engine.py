@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 import auth
+import backup_utils
 import fetch
 from logging_utils import get_logger, log_event
 import metrics
@@ -231,6 +232,25 @@ def run_sync(
             )
 
         store.mark_sync_completed(conn, new_runs=new_count, detail_failures=detail_failures)
+        try:
+            backup_path = backup_utils.auto_backup_db()
+        except Exception as e:
+            _emit_log(
+                log,
+                logging.WARNING,
+                "sync.backup.failed",
+                f"Warning: automatic backup failed: {e}",
+                error=str(e),
+            )
+        else:
+            if backup_path is not None:
+                _emit_log(
+                    log,
+                    logging.INFO,
+                    "sync.backup.completed",
+                    f"Automatic backup saved to {backup_path}",
+                    backup_path=str(backup_path),
+                )
         _emit_log(
             log,
             logging.INFO,

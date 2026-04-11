@@ -193,6 +193,9 @@ If `NYX_API_TOKEN` is set, Nyx requires `Authorization: Bearer <token>` on `/api
 | Command | Purpose |
 |---|---|
 | `python3 cli.py sync` | Incremental Garmin sync |
+| `python3 cli.py export --format json` | Export local run data to JSON |
+| `python3 cli.py export --format csv --since 2026-04-01` | Export recent run summaries to CSV |
+| `python3 cli.py backup` | Snapshot the local SQLite database |
 | `python3 cli.py status` | Show harness state |
 | `python3 cli.py doctor` | Check environment readiness |
 | `python3 cli.py report --n 20` | Print recent runs |
