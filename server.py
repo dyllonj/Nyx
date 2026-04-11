@@ -79,7 +79,7 @@ class CoachMessageRequest(BaseModel):
     message: str = Field(min_length=1)
     thread_id: int | None = None
     conversation: list[ConversationMessage] = Field(default_factory=list)
-    model: str = "kimi-2.5"
+    model: str = "kimi-k2.5"
     max_tokens: int = 1200
 
 
@@ -93,7 +93,7 @@ class EvalRunRequest(BaseModel):
     live: bool = False
     verbose: bool = False
     limit: int = 0
-    model: str = "kimi-2.5"
+    model: str = "kimi-k2.5"
 
 
 class SyncStartRequest(BaseModel):
