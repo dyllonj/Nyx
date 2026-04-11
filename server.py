@@ -9,7 +9,7 @@ import statistics
 import threading
 import uuid
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from pathlib import Path
 from typing import TypeVar
 
@@ -81,21 +81,6 @@ class SyncStartRequest(BaseModel):
     interactive: bool = False
 
 
-@dataclass
-class SyncJobState:
-    job_id: str
-    status: str = "queued"
-    created_at: str = field(default_factory=lambda: datetime.datetime.now().isoformat(timespec="seconds"))
-    updated_at: str = field(default_factory=lambda: datetime.datetime.now().isoformat(timespec="seconds"))
-    logs: list[str] = field(default_factory=list)
-    summary: dict | None = None
-    error: dict | None = None
-
-    def append_log(self, message: str) -> None:
-        self.logs.append(message)
-        self.updated_at = datetime.datetime.now().isoformat(timespec="seconds")
-
-
 app = FastAPI(
     title="Nyx Local API",
     version="0.1.0",
@@ -109,8 +94,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_sync_jobs: dict[str, SyncJobState] = {}
-_sync_jobs_lock = threading.Lock()
 DbResult = TypeVar("DbResult")
 
 
@@ -843,45 +826,41 @@ def _evidence_item(conn, bullet: str) -> dict:
     return item
 
 
-def _get_sync_job(job_id: str) -> SyncJobState:
-    with _sync_jobs_lock:
-        job = _sync_jobs.get(job_id)
-    if not job:
+def _require_sync_job(conn: sqlite3.Connection, job_id: str) -> dict:
+    job = store.get_sync_job_state(conn, job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail=f"Unknown sync job: {job_id}")
     return job
 
 
-def _sync_job_payload(job: SyncJobState) -> dict:
-    return asdict(job)
-
-
-def _run_sync_job(job: SyncJobState, email: str | None, password: str | None, interactive: bool) -> None:
+def _run_sync_job(job_id: str, email: str | None, password: str | None, interactive: bool) -> None:
     def log(message: str) -> None:
-        job.append_log(message)
+        _with_db(lambda conn: store.append_sync_job_log(conn, job_id, message))
 
     try:
-        job.status = "running"
+        _with_db(lambda conn: store.mark_sync_job_running(conn, job_id))
         summary = sync_engine.run_sync(
             log=log,
             email=email,
             password=password,
             interactive=interactive,
         )
-        job.summary = asdict(summary)
-        job.status = "success"
+        _with_db(lambda conn: store.complete_sync_job(conn, job_id, asdict(summary)))
     except HarnessError as exc:
-        job.error = _error_payload(exc)
-        job.status = "failed"
+        _with_db(lambda conn: store.fail_sync_job(conn, job_id, _error_payload(exc)))
     except Exception as exc:
-        job.error = {
-            "code": "sync_failed",
-            "message": str(exc),
-            "hint": "",
-            "details": "",
-        }
-        job.status = "failed"
-    finally:
-        job.updated_at = datetime.datetime.now().isoformat(timespec="seconds")
+        _with_db(
+            lambda conn: store.fail_sync_job(
+                conn,
+                job_id,
+                {
+                    "code": "sync_failed",
+                    "message": str(exc),
+                    "hint": "",
+                    "details": "",
+                },
+            )
+        )
 
 
 @app.get("/api")
@@ -1144,23 +1123,27 @@ async def post_coach_message(request: CoachMessageRequest):
 
 
 @app.post("/api/sync")
-def start_sync(request: SyncStartRequest):
-    job = SyncJobState(job_id=uuid.uuid4().hex)
-    with _sync_jobs_lock:
-        _sync_jobs[job.job_id] = job
+async def start_sync(request: SyncStartRequest):
+    job_id = uuid.uuid4().hex
+
+    def create(conn: sqlite3.Connection) -> dict:
+        store.create_sync_job(conn, job_id)
+        return _require_sync_job(conn, job_id)
+
+    job = await _run_db_async(create)
 
     thread = threading.Thread(
         target=_run_sync_job,
-        args=(job, request.email, request.password, request.interactive),
+        args=(job_id, request.email, request.password, request.interactive),
         daemon=True,
     )
     thread.start()
-    return _sync_job_payload(job)
+    return job
 
 
 @app.get("/api/sync/{job_id}")
-def get_sync_job(job_id: str):
-    return _sync_job_payload(_get_sync_job(job_id))
+async def get_sync_job(job_id: str):
+    return await _run_db_async(lambda conn: _require_sync_job(conn, job_id))
 
 
 @app.get("/", include_in_schema=False)

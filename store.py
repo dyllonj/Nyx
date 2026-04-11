@@ -1,4 +1,5 @@
 import datetime
+import json
 import sqlite3
 import statistics
 from typing import Optional
@@ -87,7 +88,28 @@ CREATE INDEX IF NOT EXISTS idx_coach_feedback_thread_id ON coach_feedback(thread
 CREATE INDEX IF NOT EXISTS idx_coach_feedback_verdict ON coach_feedback(verdict, updated_at DESC);
 """
 
-SCHEMA_VERSION = 5
+SYNC_JOB_SCHEMA = """
+CREATE TABLE IF NOT EXISTS sync_jobs (
+    job_id        TEXT PRIMARY KEY,
+    status        TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    summary_json  TEXT,
+    error_json    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sync_job_logs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id     TEXT NOT NULL REFERENCES sync_jobs(job_id) ON DELETE CASCADE,
+    message    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sync_jobs_updated_at ON sync_jobs(updated_at DESC, job_id DESC);
+CREATE INDEX IF NOT EXISTS idx_sync_job_logs_job_id ON sync_job_logs(job_id, id);
+"""
+
+SCHEMA_VERSION = 6
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
@@ -126,6 +148,11 @@ def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
         conn.executescript(FEEDBACK_SCHEMA)
         conn.execute("PRAGMA user_version = 5")
         current = 5
+
+    if current < 6:
+        conn.executescript(SYNC_JOB_SCHEMA)
+        conn.execute("PRAGMA user_version = 6")
+        current = 6
 
     conn.commit()
 
@@ -468,6 +495,119 @@ def set_coach_feedback(
     if row is None:
         raise RuntimeError("Failed to persist coach feedback.")
     return row
+
+
+def create_sync_job(conn: sqlite3.Connection, job_id: str, status: str = "queued") -> None:
+    now = _now_timestamp()
+    conn.execute(
+        """
+        INSERT INTO sync_jobs (job_id, status, created_at, updated_at, summary_json, error_json)
+        VALUES (?, ?, ?, ?, NULL, NULL)
+        """,
+        (job_id, status, now, now),
+    )
+    conn.commit()
+
+
+def mark_sync_job_running(conn: sqlite3.Connection, job_id: str) -> None:
+    now = _now_timestamp()
+    conn.execute(
+        """
+        UPDATE sync_jobs
+        SET status = ?, updated_at = ?
+        WHERE job_id = ?
+        """,
+        ("running", now, job_id),
+    )
+    conn.commit()
+
+
+def append_sync_job_log(conn: sqlite3.Connection, job_id: str, message: str) -> None:
+    now = _now_timestamp()
+    conn.execute(
+        """
+        INSERT INTO sync_job_logs (job_id, message, created_at)
+        VALUES (?, ?, ?)
+        """,
+        (job_id, message, now),
+    )
+    conn.execute(
+        """
+        UPDATE sync_jobs
+        SET updated_at = ?
+        WHERE job_id = ?
+        """,
+        (now, job_id),
+    )
+    conn.commit()
+
+
+def complete_sync_job(conn: sqlite3.Connection, job_id: str, summary: dict | None) -> None:
+    now = _now_timestamp()
+    conn.execute(
+        """
+        UPDATE sync_jobs
+        SET status = ?, updated_at = ?, summary_json = ?, error_json = NULL
+        WHERE job_id = ?
+        """,
+        ("success", now, json.dumps(summary) if summary is not None else None, job_id),
+    )
+    conn.commit()
+
+
+def fail_sync_job(conn: sqlite3.Connection, job_id: str, error: dict | None) -> None:
+    now = _now_timestamp()
+    conn.execute(
+        """
+        UPDATE sync_jobs
+        SET status = ?, updated_at = ?, summary_json = NULL, error_json = ?
+        WHERE job_id = ?
+        """,
+        ("failed", now, json.dumps(error) if error is not None else None, job_id),
+    )
+    conn.commit()
+
+
+def get_sync_job_state(conn: sqlite3.Connection, job_id: str) -> Optional[dict]:
+    row = conn.execute(
+        """
+        SELECT job_id, status, created_at, updated_at, summary_json, error_json
+        FROM sync_jobs
+        WHERE job_id = ?
+        """,
+        (job_id,),
+    ).fetchone()
+    if row is None:
+        return None
+
+    logs = conn.execute(
+        """
+        SELECT message
+        FROM sync_job_logs
+        WHERE job_id = ?
+        ORDER BY id ASC
+        """,
+        (job_id,),
+    ).fetchall()
+
+    def _parse_json(raw: str | None) -> dict | None:
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    return {
+        "job_id": row["job_id"],
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "logs": [log["message"] for log in logs],
+        "summary": _parse_json(row["summary_json"]),
+        "error": _parse_json(row["error_json"]),
+    }
 
 
 def get_sync_start_date(conn: sqlite3.Connection) -> str:
