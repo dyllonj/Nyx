@@ -47,7 +47,10 @@ export default function CoachScreen() {
       return;
     }
 
-    const nextMessages = [...messages, { role: "user", content: message }];
+    const nextMessages: ChatTurn[] = [
+      ...messages,
+      { role: "user", content: message },
+    ];
     setMessages(nextMessages);
     setDraft("");
     setBusy(true);
