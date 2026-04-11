@@ -251,6 +251,50 @@ def _active_conversation(conversation: list[dict]) -> list[dict]:
     return conversation[-config.COACH_MAX_CONVERSATION_MESSAGES:]
 
 
+class CoachSession:
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        model: str = "claude-opus-4-6",
+        max_tokens: int = 1200,
+    ) -> None:
+        try:
+            import anthropic
+        except ImportError as e:
+            raise DependencyError(
+                "missing_anthropic_dependency",
+                "Coach responses require the `anthropic` package.",
+                hint="Run `pip install -r requirements.txt` to enable coach chat and evals.",
+                details=str(e),
+            ) from e
+
+        self._anthropic = anthropic
+        self.client = anthropic.Anthropic()
+        self.conn = conn
+        self.model = model
+        self.max_tokens = max_tokens
+        self.base_system_blocks = build_base_system_blocks(conn)
+        self.conversation: list[dict] = []
+
+    def clear(self) -> None:
+        self.conversation.clear()
+
+    def ask(self, user_input: str) -> str:
+        system_blocks = build_turn_system_blocks(self.base_system_blocks, user_input)
+        self.conversation.append({"role": "user", "content": user_input})
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=system_blocks,
+            messages=_active_conversation(self.conversation),
+        )
+        parts = [block.text for block in response.content if getattr(block, "type", None) == "text"]
+        text = "".join(parts).strip()
+        self.conversation.append({"role": "assistant", "content": text})
+        return text
+
+
 def ask_coach_once(
     conn: sqlite3.Connection,
     user_input: str,
@@ -258,26 +302,7 @@ def ask_coach_once(
     model: str = "claude-opus-4-6",
     max_tokens: int = 1200,
 ) -> str:
-    try:
-        import anthropic
-    except ImportError as e:
-        raise DependencyError(
-            "missing_anthropic_dependency",
-            "Coach responses require the `anthropic` package.",
-            hint="Run `pip install -r requirements.txt` to enable coach chat and evals.",
-            details=str(e),
-        ) from e
-
-    client = anthropic.Anthropic()
-    system_blocks = build_turn_system_blocks(build_base_system_blocks(conn), user_input)
-    response = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system_blocks,
-        messages=[{"role": "user", "content": user_input}],
-    )
-    parts = [block.text for block in response.content if getattr(block, "type", None) == "text"]
-    return "".join(parts).strip()
+    return CoachSession(conn, model=model, max_tokens=max_tokens).ask(user_input)
 
 
 # ─── Conversation loop ────────────────────────────────────────────────────────
