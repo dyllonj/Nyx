@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Pressable,
@@ -10,19 +11,44 @@ import {
 } from "react-native";
 
 import { AppFrame } from "@/components/AppFrame";
+import { EvidenceChip } from "@/components/EvidenceChip";
+import { FeedbackRow, type FeedbackVerdict } from "@/components/FeedbackRow";
 import { MetricPill } from "@/components/MetricPill";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Surface } from "@/components/Surface";
 import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
 
+type EvidenceItem = {
+  label: string;
+  text: string;
+  kind?: "run" | "metric" | "knowledge";
+  activity_id?: number;
+  source?: string;
+};
+
+type StructuredMessage = {
+  verdict: string;
+  evidence: EvidenceItem[];
+  next_step: string;
+};
+
+type CoachFeedback = {
+  id: number;
+  thread_id: number;
+  message_id: number;
+  verdict: FeedbackVerdict;
+  created_at: string;
+  updated_at: string;
+};
+
 type ChatTurn = {
+  id?: number;
+  thread_id?: number;
   role: "user" | "assistant";
   content: string;
-  structured?: {
-    verdict: string;
-    evidence: { label: string; text: string }[];
-    next_step: string;
-  };
+  structured?: StructuredMessage;
+  feedback?: CoachFeedback | null;
 };
 
 type CoachThread = {
@@ -38,6 +64,8 @@ type PersistedCoachMessage = {
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  structured?: StructuredMessage;
+  feedback?: CoachFeedback | null;
 };
 
 type CoachThreadPayload = {
@@ -54,6 +82,7 @@ const DEFAULT_PROMPTS = [
 ];
 
 export default function CoachScreen() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const contextQuery = useQuery({
     queryKey: ["coach-context"],
@@ -69,6 +98,7 @@ export default function CoachScreen() {
   const [messages, setMessages] = useState<ChatTurn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [feedbackBusyId, setFeedbackBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -136,15 +166,28 @@ export default function CoachScreen() {
       setThreadId(response.thread?.id ?? activeThreadId);
       setMessages([
         ...nextMessages,
-        {
-          role: "assistant",
-          content: response.raw_text,
-          structured: {
-            verdict: response.verdict,
-            evidence: response.evidence ?? [],
-            next_step: response.next_step,
-          },
-        },
+        response.assistant_message
+          ? {
+              id: response.assistant_message.id,
+              thread_id: response.assistant_message.thread_id,
+              role: "assistant",
+              content: response.raw_text,
+              structured: response.assistant_message.structured ?? {
+                verdict: response.verdict,
+                evidence: response.evidence ?? [],
+                next_step: response.next_step,
+              },
+              feedback: response.assistant_message.feedback ?? null,
+            }
+          : {
+              role: "assistant",
+              content: response.raw_text,
+              structured: {
+                verdict: response.verdict,
+                evidence: response.evidence ?? [],
+                next_step: response.next_step,
+              },
+            },
       ]);
       queryClient.invalidateQueries({ queryKey: ["coach-thread-current"] });
     } catch (requestError) {
@@ -155,8 +198,55 @@ export default function CoachScreen() {
     }
   }
 
+  async function submitFeedback(messageId: number, verdict: FeedbackVerdict, targetThreadId?: number) {
+    const activeThreadId = targetThreadId ?? threadId;
+    if (!activeThreadId || feedbackBusyId) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setFeedbackBusyId(messageId);
+      const response = await api.postCoachFeedback({
+        thread_id: activeThreadId,
+        message_id: messageId,
+        verdict,
+      });
+
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                feedback: response.feedback,
+              }
+            : message,
+        ),
+      );
+      queryClient.invalidateQueries({ queryKey: ["coach-context"] });
+      queryClient.invalidateQueries({ queryKey: ["athlete-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["coach-thread-current"] });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to save coach feedback.");
+    } finally {
+      setFeedbackBusyId(null);
+    }
+  }
+
+  function handleEvidencePress(item: EvidenceItem) {
+    if (item.kind === "run" && item.activity_id) {
+      router.push(`/run/${item.activity_id}` as any);
+      return;
+    }
+
+    if (item.kind === "metric") {
+      router.push("/athlete" as any);
+    }
+  }
+
   const context = contextQuery.data;
   const thread = threadQuery.data?.thread;
+  const qualitySummary = context?.quality_summary;
   const threadMeta = threadQuery.isLoading && !threadId
     ? "Loading saved chat..."
     : messages.length > 0
@@ -182,6 +272,13 @@ export default function CoachScreen() {
             value={context?.zone_2 ? `${context.zone_2.hr_low}-${context.zone_2.hr_high} bpm` : "n/a"}
           />
         </View>
+        <View style={styles.qualityRow}>
+          <Text style={styles.qualityLabel}>Guidance quality</Text>
+          <StatusBadge status={qualitySummary?.status ?? "unknown"} />
+        </View>
+        <Text style={styles.threadMeta}>
+          {qualitySummary?.summary ?? "No coach feedback has been captured yet."}
+        </Text>
         <Text style={styles.threadMeta}>{threadMeta}</Text>
       </Surface>
 
@@ -197,11 +294,11 @@ export default function CoachScreen() {
 
           {messages.map((message, index) =>
             message.role === "user" ? (
-              <View key={index} style={styles.userBubble}>
+              <View key={message.id ?? `${message.role}-${index}`} style={styles.userBubble}>
                 <Text style={styles.userText}>{message.content}</Text>
               </View>
             ) : (
-              <View key={index} style={styles.assistantCard}>
+              <View key={message.id ?? `${message.role}-${index}`} style={styles.assistantCard}>
                 <Text style={styles.cardLabel}>Verdict</Text>
                 <Text style={styles.cardBody}>{message.structured?.verdict ?? message.content}</Text>
                 {message.structured?.evidence?.length ? (
@@ -209,10 +306,16 @@ export default function CoachScreen() {
                     <Text style={styles.cardLabel}>Evidence</Text>
                     <View style={styles.evidenceList}>
                       {message.structured.evidence.map((item, evidenceIndex) => (
-                        <View key={evidenceIndex} style={styles.evidenceItem}>
-                          <Text style={styles.evidenceLabel}>{item.label}</Text>
-                          <Text style={styles.evidenceText}>{item.text}</Text>
-                        </View>
+                        <EvidenceChip
+                          key={`${message.id ?? index}-${evidenceIndex}`}
+                          label={item.label}
+                          onPress={
+                            item.kind === "run" || item.kind === "metric"
+                              ? () => handleEvidencePress(item)
+                              : undefined
+                          }
+                          text={item.text}
+                        />
                       ))}
                     </View>
                   </>
@@ -223,6 +326,16 @@ export default function CoachScreen() {
                     <Text style={styles.cardBody}>{message.structured.next_step}</Text>
                   </>
                 ) : null}
+                <Text style={styles.cardLabel}>Was this useful?</Text>
+                <FeedbackRow
+                  busy={feedbackBusyId === message.id}
+                  onSelect={(verdict) => {
+                    if (message.id) {
+                      void submitFeedback(message.id, verdict, message.thread_id);
+                    }
+                  }}
+                  selected={message.feedback?.verdict ?? null}
+                />
               </View>
             ),
           )}
@@ -270,15 +383,21 @@ export default function CoachScreen() {
 
 function hydrateConversation(messages: PersistedCoachMessage[]): ChatTurn[] {
   return messages.map((message) => ({
+    id: message.id,
+    thread_id: message.thread_id,
     role: message.role,
     content: message.content,
-    structured: message.role === "assistant" ? parseStructuredMessage(message.content) : undefined,
+    structured:
+      message.role === "assistant"
+        ? message.structured ?? parseStructuredMessage(message.content)
+        : undefined,
+    feedback: message.feedback ?? null,
   }));
 }
 
-function parseStructuredMessage(content: string): ChatTurn["structured"] | undefined {
+function parseStructuredMessage(content: string): StructuredMessage | undefined {
   let verdict = "";
-  const evidence: { label: string; text: string }[] = [];
+  const evidence: EvidenceItem[] = [];
   let nextStep = "";
   let section: "verdict" | "evidence" | "next_step" | null = null;
 
@@ -359,6 +478,18 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: theme.spacing.sm,
   },
+  qualityRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: theme.spacing.lg,
+  },
+  qualityLabel: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fonts.body,
+    fontSize: 16,
+    fontWeight: "600",
+  },
   threadMeta: {
     color: theme.colors.textSecondary,
     fontFamily: theme.fonts.body,
@@ -414,23 +545,6 @@ const styles = StyleSheet.create({
   evidenceList: {
     gap: 8,
   },
-  evidenceItem: {
-    borderLeftColor: theme.colors.borderStrong,
-    borderLeftWidth: 1,
-    gap: 4,
-    paddingLeft: theme.spacing.md,
-  },
-  evidenceLabel: {
-    color: theme.colors.textPrimary,
-    fontFamily: theme.fonts.mono,
-    fontSize: 12,
-  },
-  evidenceText: {
-    color: theme.colors.textSecondary,
-    fontFamily: theme.fonts.body,
-    fontSize: 14,
-    lineHeight: 20,
-  },
   promptRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -468,36 +582,35 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.body,
     fontSize: 15,
     lineHeight: 22,
-    maxHeight: 160,
-    minHeight: 72,
+    maxHeight: 140,
+    minHeight: 56,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: 14,
     textAlignVertical: "top",
   },
   sendButton: {
     alignItems: "center",
-    backgroundColor: theme.colors.actionPrimaryBg,
+    backgroundColor: theme.colors.textPrimary,
     borderRadius: theme.radius.pill,
     justifyContent: "center",
     minHeight: 48,
-    minWidth: 96,
-    paddingHorizontal: 18,
+    minWidth: 92,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   sendButtonPressed: {
-    opacity: 0.72,
+    opacity: 0.88,
   },
   sendButtonText: {
-    color: theme.colors.actionPrimaryText,
-    fontFamily: theme.fonts.mono,
-    fontSize: 13,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-  },
-  errorText: {
-    color: "#ff8d8d",
+    color: theme.colors.textInverse,
     fontFamily: theme.fonts.body,
     fontSize: 14,
-    lineHeight: 20,
+    fontWeight: "600",
+  },
+  errorText: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fonts.body,
+    fontSize: 14,
     marginTop: theme.spacing.md,
   },
 });

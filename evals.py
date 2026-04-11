@@ -14,6 +14,7 @@ FAIL = "FAIL"
 @dataclass
 class EvalResult:
     eval_id: str
+    category: str
     status: str
     summary: str
     response: str = ""
@@ -28,6 +29,7 @@ _BPM_RANGE_RE = re.compile(r"\b\d{2,3}\s*[–-]\s*\d{2,3}\s*bpm\b", re.IGNORECAS
 GOLDEN_QUESTIONS = [
     {
         "eval_id": "easy_pace",
+        "category": "grounding",
         "question": "What pace should my easy runs be right now?",
         "needs_vdot": True,
         "checks": [
@@ -38,6 +40,7 @@ GOLDEN_QUESTIONS = [
     },
     {
         "eval_id": "threshold_pace",
+        "category": "grounding",
         "question": "What's my tempo or threshold pace?",
         "needs_vdot": True,
         "checks": [
@@ -48,6 +51,7 @@ GOLDEN_QUESTIONS = [
     },
     {
         "eval_id": "easy_too_hard",
+        "category": "grounding",
         "question": "Am I running my easy runs too hard?",
         "needs_runs": True,
         "checks": [
@@ -58,6 +62,7 @@ GOLDEN_QUESTIONS = [
     },
     {
         "eval_id": "easy_hr_zone",
+        "category": "grounding",
         "question": "What heart rate zone should my easy runs be in?",
         "needs_hr_zones": True,
         "checks": [
@@ -84,25 +89,35 @@ def run_offline_evals(conn: sqlite3.Connection) -> list[EvalResult]:
     results = [
         EvalResult(
             eval_id="context_present",
+            category="coverage",
             status=PASS if bool(context.strip()) else FAIL,
             summary="Coach data context builds successfully." if context.strip() else "Coach data context is empty.",
         ),
         EvalResult(
             eval_id="evidence_contract",
+            category="structure",
             status=PASS if "Evidence and citation requirements" in coach.SYSTEM_PROMPT else FAIL,
             summary="System prompt includes evidence/citation expectations." if "Evidence and citation requirements" in coach.SYSTEM_PROMPT else "System prompt lacks explicit evidence/citation expectations.",
+        ),
+        EvalResult(
+            eval_id="safety_contract",
+            category="safety",
+            status=PASS if "Injury-aware" in coach.SYSTEM_PROMPT else FAIL,
+            summary="System prompt explicitly includes injury-aware coaching." if "Injury-aware" in coach.SYSTEM_PROMPT else "System prompt is missing an explicit injury-aware coaching directive.",
         ),
     ]
 
     if total_runs == 0:
         results.insert(1, EvalResult(
             eval_id="context_compaction",
+            category="structure",
             status=WARN,
             summary="Skipped: there is no run data yet, so prompt compaction cannot be evaluated meaningfully.",
         ))
     else:
         results.insert(1, EvalResult(
             eval_id="context_compaction",
+            category="structure",
             status=PASS if "Run History (most recent" in context else WARN,
             summary="Prompt context uses a compact recent-run table." if "Run History (most recent" in context else "Prompt context is not obviously compacted.",
         ))
@@ -111,12 +126,14 @@ def run_offline_evals(conn: sqlite3.Connection) -> list[EvalResult]:
         if total_runs == 0:
             results.append(EvalResult(
                 eval_id="vdot_context",
+                category="coverage",
                 status=WARN,
                 summary="Skipped: VDOT metadata exists, but there is no run history in the local DB.",
             ))
         else:
             results.append(EvalResult(
                 eval_id="vdot_context",
+                category="coverage",
                 status=PASS if "Easy pace" in context and "Threshold pace" in context else FAIL,
                 summary="VDOT training paces are available in coach context." if "Easy pace" in context and "Threshold pace" in context else "VDOT context is missing training pace lines.",
             ))
@@ -125,12 +142,14 @@ def run_offline_evals(conn: sqlite3.Connection) -> list[EvalResult]:
         if total_runs == 0:
             results.append(EvalResult(
                 eval_id="hr_zone_context",
+                category="coverage",
                 status=WARN,
                 summary="Skipped: HR zones exist, but there is no run history in the local DB.",
             ))
         else:
             results.append(EvalResult(
                 eval_id="hr_zone_context",
+                category="coverage",
                 status=PASS if "Zone 2" in context and "Heart Rate Zones" in context else FAIL,
                 summary="HR zones are available in coach context." if "Zone 2" in context and "Heart Rate Zones" in context else "HR zones are missing from coach context.",
             ))
@@ -158,22 +177,22 @@ def run_live_evals(
 
     for case in selected:
         if case.get("needs_vdot") and not _has_meta(conn, "current_vdot"):
-            results.append(EvalResult(case["eval_id"], WARN, "Skipped: current VDOT is not available."))
+            results.append(EvalResult(case["eval_id"], case["category"], WARN, "Skipped: current VDOT is not available."))
             continue
         if case.get("needs_hr_zones") and not _has_meta(conn, "hr_zones_json"):
-            results.append(EvalResult(case["eval_id"], WARN, "Skipped: HR zones are not available."))
+            results.append(EvalResult(case["eval_id"], case["category"], WARN, "Skipped: HR zones are not available."))
             continue
         if case.get("needs_runs"):
             row = conn.execute("SELECT COUNT(*) AS n FROM runs").fetchone()
             if not row or not row["n"]:
-                results.append(EvalResult(case["eval_id"], WARN, "Skipped: no run history is available."))
+                results.append(EvalResult(case["eval_id"], case["category"], WARN, "Skipped: no run history is available."))
                 continue
 
         response = coach.ask_coach_once(conn, case["question"], model=model)
         failing_checks = [label for label, predicate in case["checks"] if not predicate(response)]
         status = PASS if not failing_checks else FAIL
         summary = "All checks passed." if not failing_checks else f"Failed checks: {', '.join(failing_checks)}"
-        results.append(EvalResult(case["eval_id"], status, summary, response=response))
+        results.append(EvalResult(case["eval_id"], case["category"], status, summary, response=response))
 
     return results
 

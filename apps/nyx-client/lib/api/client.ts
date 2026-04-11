@@ -73,6 +73,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ live: true }),
     }),
+  postCoachFeedback: (payload: {
+    thread_id: number;
+    message_id: number;
+    verdict: "helpful" | "too_generic" | "not_grounded" | "unsafe";
+  }) =>
+    apiRequest<any>("/api/coach/feedback", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   postCoachMessage: (payload: {
     message: string;
     thread_id?: number;

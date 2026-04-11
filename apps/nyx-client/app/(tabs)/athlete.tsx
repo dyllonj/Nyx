@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { AppFrame } from "@/components/AppFrame";
 import { SectionHeader } from "@/components/SectionHeader";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Surface } from "@/components/Surface";
 import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
@@ -25,6 +26,36 @@ export default function AthleteScreen() {
       title="Athlete"
       subtitle="Recent load, current paces, and the signals Nyx is using to reason about progression."
     >
+      <Surface>
+        <SectionHeader
+          eyebrow="Direction of travel"
+          title={athlete?.goal_preview?.text ?? "Progress without a clear goal"}
+          subtitle="This is the factual read on whether current training signals are moving in a useful direction."
+        />
+        <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>Overall</Text>
+          <StatusBadge status={athlete?.coach_status?.progress?.status ?? "unknown"} />
+        </View>
+        <Text style={styles.summaryText}>
+          {athlete?.coach_status?.progress?.summary ?? "Need more history before progress can be assessed cleanly."}
+        </Text>
+        <View style={styles.reasonList}>
+          {(athlete?.coach_status?.progress?.reasons ?? []).map((reason: string) => (
+            <Text key={reason} style={styles.reasonText}>
+              - {reason}
+            </Text>
+          ))}
+        </View>
+        {athlete?.coach_status?.safety?.status !== "on_track" ? (
+          <View style={styles.safetyNote}>
+            <Text style={styles.safetyLabel}>Safety note</Text>
+            <Text style={styles.subtle}>
+              {athlete?.coach_status?.safety?.summary ?? "Recovery signals need a closer look."}
+            </Text>
+          </View>
+        ) : null}
+      </Surface>
+
       <View style={styles.grid}>
         <Surface>
           <Text style={styles.label}>42-day load</Text>
@@ -121,6 +152,48 @@ function MetricRow({
 const styles = StyleSheet.create({
   grid: {
     gap: theme.spacing.lg,
+  },
+  statusRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: theme.spacing.lg,
+  },
+  statusLabel: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fonts.body,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  summaryText: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fonts.body,
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: theme.spacing.md,
+  },
+  reasonList: {
+    gap: 8,
+    marginTop: theme.spacing.lg,
+  },
+  reasonText: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.body,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  safetyNote: {
+    borderTopColor: theme.colors.borderSubtle,
+    borderTopWidth: 1,
+    marginTop: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+  },
+  safetyLabel: {
+    color: theme.colors.textTertiary,
+    fontFamily: theme.fonts.mono,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
   },
   label: {
     color: theme.colors.textTertiary,

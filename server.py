@@ -60,7 +60,7 @@ class CoachMessageRequest(BaseModel):
 class CoachFeedbackRequest(BaseModel):
     thread_id: int
     message_id: int
-    verdict: str = Field(pattern="^(helpful|too_generic|not_grounded|unsafe)$")
+    verdict: str
 
 
 class EvalRunRequest(BaseModel):
@@ -264,7 +264,7 @@ def _feedback_summary_payload(rows, *, window: int) -> dict:
         summary = "A recent coach answer was marked unsafe."
     elif serious_ratio >= 0.34:
         status = "at_risk"
-        summary = f"{helpful} of last {total} responses were still marked helpful."
+        summary = f"{not_grounded + unsafe} of last {total} responses were flagged not grounded or unsafe."
     elif helpful == total:
         status = "on_track"
         summary = f"All {total} recent responses were rated helpful."

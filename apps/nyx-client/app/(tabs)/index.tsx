@@ -12,6 +12,7 @@ import {
 import { AppFrame } from "@/components/AppFrame";
 import { MetricPill } from "@/components/MetricPill";
 import { SectionHeader } from "@/components/SectionHeader";
+import { SignalRow } from "@/components/SignalRow";
 import { Surface } from "@/components/Surface";
 import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
@@ -92,6 +93,11 @@ export default function HomeScreen() {
       return;
     }
 
+    if (athlete?.next_action?.action === "athlete") {
+      router.push("/athlete" as any);
+      return;
+    }
+
     router.push("/coach" as any);
   }
 
@@ -133,6 +139,34 @@ export default function HomeScreen() {
           <Text style={styles.syncLog}>{syncJob.logs[syncJob.logs.length - 1]}</Text>
         ) : null}
         {syncError ? <Text style={styles.errorText}>{syncError}</Text> : null}
+      </Surface>
+
+      <Surface>
+        <SectionHeader
+          eyebrow="Coach status"
+          title="Is Nyx helping right now?"
+          subtitle="Progress, guidance quality, and safety stay separate so this screen does not fake precision."
+        />
+        <View style={styles.signalStack}>
+          <SignalRow
+            label="Progress"
+            status={athlete?.coach_status?.progress?.status ?? "unknown"}
+            summary={athlete?.coach_status?.progress?.summary ?? "Need more data to read direction of travel."}
+          />
+          <SignalRow
+            label="Quality"
+            status={athlete?.coach_status?.quality?.status ?? "unknown"}
+            summary={athlete?.coach_status?.quality?.summary ?? "No coach feedback has been captured yet."}
+          />
+          <SignalRow
+            label="Safety"
+            status={athlete?.coach_status?.safety?.status ?? "unknown"}
+            summary={athlete?.coach_status?.safety?.summary ?? "Safety checks need more recent data."}
+          />
+        </View>
+        <Text style={styles.nextMove}>
+          Next move: {athlete?.coach_status?.next_action?.reason ?? "Open Coach and pressure-test the next training decision."}
+        </Text>
       </Surface>
 
       <View style={styles.twoColumn}>
@@ -232,6 +266,17 @@ const styles = StyleSheet.create({
   },
   twoColumn: {
     gap: theme.spacing.lg,
+  },
+  signalStack: {
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.lg,
+  },
+  nextMove: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.body,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: theme.spacing.lg,
   },
   kicker: {
     color: theme.colors.textTertiary,
