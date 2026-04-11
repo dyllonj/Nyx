@@ -19,6 +19,7 @@ import logging
 import os
 import sqlite3
 import sys
+import threading
 
 import config
 import knowledge_base
@@ -209,10 +210,7 @@ Next step: one concise paragraph
 Tone: direct, informed, encouraging but not sycophantic. You're a coach who knows this athlete's data cold."""
 
 
-def build_base_system_blocks(conn: sqlite3.Connection) -> list[dict]:
-    profile_context = onboarding.build_profile_context(conn)
-    data_context = build_data_context(conn)
-
+def _compose_base_system_blocks(profile_context: str, data_context: str) -> list[dict]:
     base_system_blocks = [
         {
             "type": "text",
@@ -232,6 +230,27 @@ def build_base_system_blocks(conn: sqlite3.Connection) -> list[dict]:
         "cache_control": {"type": "ephemeral"},
     })
     return base_system_blocks
+
+
+def build_base_system_blocks(conn: sqlite3.Connection) -> list[dict]:
+    global _cached_base_system_blocks, _cached_context_hash
+
+    current_hash = store.get_context_hash(conn)
+    with _base_system_cache_lock:
+        if _cached_base_system_blocks is not None and _cached_context_hash == current_hash:
+            log_event(logger, logging.DEBUG, "coach.context_cache.hit", context_hash=current_hash)
+            return list(_cached_base_system_blocks)
+
+    profile_context = onboarding.build_profile_context(conn)
+    data_context = build_data_context(conn)
+    base_system_blocks = _compose_base_system_blocks(profile_context, data_context)
+
+    with _base_system_cache_lock:
+        _cached_context_hash = current_hash
+        _cached_base_system_blocks = list(base_system_blocks)
+
+    log_event(logger, logging.INFO, "coach.context_cache.rebuilt", context_hash=current_hash)
+    return list(base_system_blocks)
 
 
 def build_turn_system_blocks(
@@ -258,6 +277,9 @@ coach_circuit_breaker = CircuitBreaker(
     failure_threshold=config.COACH_CIRCUIT_BREAKER_FAILURES,
     recovery_timeout_sec=config.COACH_CIRCUIT_BREAKER_TIMEOUT_SEC,
 )
+_base_system_cache_lock = threading.Lock()
+_cached_base_system_blocks: list[dict] | None = None
+_cached_context_hash: str | None = None
 
 
 def _flatten_system(blocks: list[dict]) -> str:

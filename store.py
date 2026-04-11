@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 import json
 import sqlite3
 import statistics
@@ -608,6 +609,33 @@ def get_sync_job_state(conn: sqlite3.Connection, job_id: str) -> Optional[dict]:
         "summary": _parse_json(row["summary_json"]),
         "error": _parse_json(row["error_json"]),
     }
+
+
+def get_context_hash(conn: sqlite3.Connection) -> str:
+    run_row = conn.execute(
+        """
+        SELECT
+            COUNT(*) AS total_runs,
+            MAX(start_time) AS latest_run_start,
+            MAX(created_at) AS latest_run_created_at
+        FROM runs
+        """
+    ).fetchone()
+
+    payload = {
+        "total_runs": int(run_row["total_runs"] or 0) if run_row else 0,
+        "latest_run_start": run_row["latest_run_start"] if run_row else None,
+        "latest_run_created_at": run_row["latest_run_created_at"] if run_row else None,
+        "last_sync_completed_at": get_meta(conn, "last_sync_completed_at"),
+        "ae_baseline": get_meta(conn, "ae_baseline"),
+        "current_vdot": get_meta(conn, "current_vdot"),
+        "hr_zones_json": get_meta(conn, "hr_zones_json"),
+        "onboarding_completed": get_meta(conn, "onboarding_completed"),
+        "onboarding_goal": get_meta(conn, "onboarding_goal"),
+        "onboarding_red_flags": get_meta(conn, "onboarding_red_flags"),
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def get_sync_start_date(conn: sqlite3.Connection) -> str:
