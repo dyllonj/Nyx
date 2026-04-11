@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
+import asyncio
 import datetime
 import json
+import queue
 import re
+import sqlite3
 import statistics
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TypeVar
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -106,6 +111,7 @@ app.add_middleware(
 
 _sync_jobs: dict[str, SyncJobState] = {}
 _sync_jobs_lock = threading.Lock()
+DbResult = TypeVar("DbResult")
 
 
 def _error_payload(exc: HarnessError) -> dict:
@@ -122,8 +128,38 @@ async def handle_harness_error(_, exc: HarnessError):
     return JSONResponse(status_code=400, content={"error": _error_payload(exc)})
 
 
-def _open_db():
-    return store.open_db()
+def _with_db(callback: Callable[[sqlite3.Connection], DbResult]) -> DbResult:
+    conn = store.open_db()
+    try:
+        return callback(conn)
+    finally:
+        conn.close()
+
+
+async def _run_blocking_async(callback: Callable[[], DbResult]) -> DbResult:
+    results: queue.SimpleQueue[tuple[bool, object]] = queue.SimpleQueue()
+
+    def worker() -> None:
+        try:
+            results.put((True, callback()))
+        except Exception as exc:
+            results.put((False, exc))
+
+    threading.Thread(target=worker, daemon=True).start()
+    while True:
+        try:
+            ok, value = results.get_nowait()
+        except queue.Empty:
+            await asyncio.sleep(0.01)
+            continue
+
+        if ok:
+            return value  # type: ignore[return-value]
+        raise value  # type: ignore[misc]
+
+
+async def _run_db_async(callback: Callable[[sqlite3.Connection], DbResult]) -> DbResult:
+    return await _run_blocking_async(lambda: _with_db(callback))
 
 
 def _resolve_web_response_path(request_path: str) -> Path | None:
@@ -858,18 +894,13 @@ def api_root():
 
 
 @app.get("/api/status")
-def get_status():
-    conn = _open_db()
-    try:
-        return health.collect_status(conn)
-    finally:
-        conn.close()
+async def get_status():
+    return await _run_db_async(health.collect_status)
 
 
 @app.get("/api/doctor")
-def get_doctor():
-    conn = _open_db()
-    try:
+async def get_doctor():
+    def load(conn: sqlite3.Connection) -> dict:
         checks = [asdict(check) for check in health.run_doctor(conn)]
         counts = {
             "pass": sum(1 for check in checks if check["status"] == health.PASS),
@@ -877,33 +908,27 @@ def get_doctor():
             "fail": sum(1 for check in checks if check["status"] == health.FAIL),
         }
         return {"checks": checks, "counts": counts}
-    finally:
-        conn.close()
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/athlete/summary")
-def get_athlete_summary():
-    conn = _open_db()
-    try:
-        return _athlete_summary(conn)
-    finally:
-        conn.close()
+async def get_athlete_summary():
+    return await _run_db_async(_athlete_summary)
 
 
 @app.get("/api/runs")
-def get_runs(limit: int = 50):
-    conn = _open_db()
-    try:
+async def get_runs(limit: int = 50):
+    def load(conn: sqlite3.Connection) -> dict:
         runs = store.get_all_runs(conn, limit=limit)
         return {"runs": [_serialize_run(row) for row in runs]}
-    finally:
-        conn.close()
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/runs/{activity_id}")
-def get_run_detail(activity_id: int):
-    conn = _open_db()
-    try:
+async def get_run_detail(activity_id: int):
+    def load(conn: sqlite3.Connection) -> dict:
         row = store.get_run(conn, activity_id)
         if not row:
             raise HTTPException(status_code=404, detail=f"Unknown run: {activity_id}")
@@ -930,61 +955,52 @@ def get_run_detail(activity_id: int):
                 for lap in laps
             ],
         }
-    finally:
-        conn.close()
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/vdot")
-def get_vdot():
-    conn = _open_db()
-    try:
+async def get_vdot():
+    def load(conn: sqlite3.Connection) -> dict:
         return {"vdot": _current_vdot_payload(conn)}
-    finally:
-        conn.close()
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/hr-zones")
-def get_hr_zones():
-    conn = _open_db()
-    try:
+async def get_hr_zones():
+    def load(conn: sqlite3.Connection) -> dict:
         return {"hr_zones": _parse_hr_zones(conn)}
-    finally:
-        conn.close()
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/coach/context")
-def get_coach_context():
-    conn = _open_db()
-    try:
-        return _coach_context_summary(conn)
-    finally:
-        conn.close()
+async def get_coach_context():
+    return await _run_db_async(_coach_context_summary)
 
 
 @app.get("/api/coach/thread/current")
-def get_current_coach_thread():
-    conn = _open_db()
-    try:
+async def get_current_coach_thread():
+    def load(conn: sqlite3.Connection) -> dict:
         thread = store.get_or_create_active_coach_thread(conn)
         return _coach_thread_payload(conn, thread)
-    finally:
-        conn.close()
+
+    return await _run_db_async(load)
 
 
 @app.post("/api/coach/thread")
-def create_coach_thread():
-    conn = _open_db()
-    try:
+async def create_coach_thread():
+    def create(conn: sqlite3.Connection) -> dict:
         thread = store.create_coach_thread(conn)
         return _coach_thread_payload(conn, thread)
-    finally:
-        conn.close()
+
+    return await _run_db_async(create)
 
 
 @app.post("/api/vdot/recalc")
-def recalc_vdot():
-    conn = _open_db()
-    try:
+async def recalc_vdot():
+    def recalculate(conn: sqlite3.Connection) -> dict:
         vdot = vdot_zones.estimate_vdot_from_runs(conn)
         hr_zones = vdot_zones._refresh_hr_zones(conn)
         return {
@@ -992,14 +1008,13 @@ def recalc_vdot():
             "hr_zones": hr_zones,
             "updated": bool(vdot or hr_zones),
         }
-    finally:
-        conn.close()
+
+    return await _run_db_async(recalculate)
 
 
 @app.post("/api/evals/run")
-def run_evals(request: EvalRunRequest):
-    conn = _open_db()
-    try:
+async def run_evals(request: EvalRunRequest):
+    def execute(conn: sqlite3.Connection) -> dict:
         if request.live:
             results = evals.run_live_evals(
                 conn,
@@ -1028,14 +1043,13 @@ def run_evals(request: EvalRunRequest):
         if request.verbose:
             response["report"] = evals.format_eval_report(results, verbose=True)
         return response
-    finally:
-        conn.close()
+
+    return await _run_db_async(execute)
 
 
 @app.post("/api/coach/feedback")
-def post_coach_feedback(request: CoachFeedbackRequest):
-    conn = _open_db()
-    try:
+async def post_coach_feedback(request: CoachFeedbackRequest):
+    def persist(conn: sqlite3.Connection) -> dict:
         thread = store.get_coach_thread(conn, request.thread_id)
         if thread is None:
             raise HTTPException(status_code=404, detail="Coach thread not found.")
@@ -1060,14 +1074,13 @@ def post_coach_feedback(request: CoachFeedbackRequest):
             "feedback": _serialize_coach_feedback(feedback),
             "quality_summary": _coach_feedback_summary(conn, limit=10),
         }
-    finally:
-        conn.close()
+
+    return await _run_db_async(persist)
 
 
 @app.post("/api/coach/message")
-def post_coach_message(request: CoachMessageRequest):
-    conn = _open_db()
-    try:
+async def post_coach_message(request: CoachMessageRequest):
+    def handle(conn: sqlite3.Connection) -> dict:
         thread = _resolve_coach_thread(conn, request.thread_id)
         persisted_messages = store.get_coach_messages(conn, thread["id"])
         if persisted_messages:
@@ -1126,8 +1139,8 @@ def post_coach_message(request: CoachMessageRequest):
             "conversation": session.conversation,
             "sources": sources,
         }
-    finally:
-        conn.close()
+
+    return await _run_db_async(handle)
 
 
 @app.post("/api/sync")
