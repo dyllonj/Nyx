@@ -341,7 +341,11 @@ def run_coach():
     if onboarding.needs_onboarding(conn):
         onboarding.run_onboarding(conn)
 
-    conversation: list[dict] = []
+    thread = store.get_or_create_active_coach_thread(conn)
+    conversation = [
+        {"role": row["role"], "content": row["content"]}
+        for row in store.get_coach_messages(conn, thread["id"])
+    ]
 
     print("\n" + "═" * 60)
     print("  AI RUNNING COACH")
@@ -349,6 +353,8 @@ def run_coach():
     print("═" * 60)
     print(f"  {total_runs} runs loaded. Ask me anything about your training.")
     print("  Type 'quit' to exit, 'clear' to reset conversation.\n")
+    if conversation:
+        print(f"  Resuming saved coach thread with {len(conversation)} messages.\n")
 
     base_system_blocks = build_base_system_blocks(conn)
 
@@ -367,8 +373,9 @@ def run_coach():
             break
 
         if user_input.lower() == "clear":
+            thread = store.create_coach_thread(conn)
             conversation.clear()
-            print("[Conversation cleared — data context preserved]\n")
+            print("[Started a new saved coach thread — data context preserved]\n")
             continue
 
         if user_input.lower() == "summary":
@@ -416,6 +423,9 @@ def run_coach():
 
         print("\n", flush=True)
         conversation.append({"role": "assistant", "content": full_response})
+        store.append_coach_message(conn, thread["id"], "user", user_input)
+        store.maybe_set_coach_thread_title_from_message(conn, thread["id"], user_input)
+        store.append_coach_message(conn, thread["id"], "assistant", full_response)
 
 
 if __name__ == "__main__":

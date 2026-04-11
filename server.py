@@ -26,6 +26,22 @@ _DATE_RE = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
 _SOURCE_RE = re.compile(r"\[Source:\s*([^\]]+)\]")
 _ROOT_DIR = Path(__file__).resolve().parent
 _WEB_DIST_DIR = _ROOT_DIR / "apps" / "nyx-client" / "dist"
+_FEEDBACK_VERDICTS = ("helpful", "too_generic", "not_grounded", "unsafe")
+_STATUS_RANK = {
+    "unknown": 0,
+    "on_track": 1,
+    "mixed": 2,
+    "at_risk": 3,
+}
+_SEVERE_SAFETY_FLAGS = {"rf_current_pain", "rf_stress_fracture", "rf_multiple_injuries"}
+_CAUTION_SAFETY_FLAGS = {
+    "rf_reds_pattern",
+    "rf_rest_anxiety",
+    "rf_always_pushes_through",
+    "rf_overtraining",
+    "rf_sleep_restoration",
+    "rf_menstrual_disruption",
+}
 
 
 class ConversationMessage(BaseModel):
@@ -39,6 +55,12 @@ class CoachMessageRequest(BaseModel):
     conversation: list[ConversationMessage] = Field(default_factory=list)
     model: str = "kimi-2.5"
     max_tokens: int = 1200
+
+
+class CoachFeedbackRequest(BaseModel):
+    thread_id: int
+    message_id: int
+    verdict: str = Field(pattern="^(helpful|too_generic|not_grounded|unsafe)$")
 
 
 class EvalRunRequest(BaseModel):
@@ -208,6 +230,327 @@ def _weekly_mileage(runs, weeks: int = 8) -> list[dict]:
     ]
 
 
+def _feedback_counts(rows) -> dict:
+    counts = {verdict: 0 for verdict in _FEEDBACK_VERDICTS}
+    for row in rows:
+        verdict = row["verdict"]
+        if verdict in counts:
+            counts[verdict] += 1
+    counts["total"] = sum(counts.values())
+    return counts
+
+
+def _feedback_summary_payload(rows, *, window: int) -> dict:
+    counts = _feedback_counts(rows)
+    total = counts["total"]
+
+    if total == 0:
+        return {
+            "status": "unknown",
+            "summary": "No response feedback yet.",
+            "counts": counts,
+            "window": window,
+        }
+
+    helpful = counts["helpful"]
+    generic = counts["too_generic"]
+    not_grounded = counts["not_grounded"]
+    unsafe = counts["unsafe"]
+    helpful_ratio = helpful / total
+    serious_ratio = (not_grounded + unsafe) / total
+
+    if unsafe:
+        status = "at_risk"
+        summary = "A recent coach answer was marked unsafe."
+    elif serious_ratio >= 0.34:
+        status = "at_risk"
+        summary = f"{helpful} of last {total} responses were still marked helpful."
+    elif helpful == total:
+        status = "on_track"
+        summary = f"All {total} recent responses were rated helpful."
+    elif helpful_ratio >= 0.7 and generic <= 1:
+        status = "on_track"
+        summary = f"{helpful} of last {total} responses were rated helpful."
+    else:
+        status = "mixed"
+        summary = f"{helpful} of last {total} responses were rated helpful."
+
+    return {
+        "status": status,
+        "summary": summary,
+        "counts": counts,
+        "window": window,
+    }
+
+
+def _coach_feedback_summary(conn, *, thread_id: int | None = None, limit: int = 10) -> dict:
+    rows = store.get_coach_feedback(conn, thread_id=thread_id, limit=limit)
+    return _feedback_summary_payload(rows, window=limit)
+
+
+def _goal_preview(conn) -> dict | None:
+    raw = store.get_meta(conn, "onboarding_goal")
+    if not raw:
+        return None
+
+    text = " ".join(raw.split())
+    if len(text) > 120:
+        text = text[:117].rstrip() + "..."
+    return {
+        "text": text,
+        "source": "onboarding",
+    }
+
+
+def _onboarding_flags(conn) -> list[str]:
+    raw = store.get_meta(conn, "onboarding_red_flags") or "[]"
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+    return [str(flag) for flag in parsed]
+
+
+def _latest_weekly_change(weekly_mileage: list[dict]) -> dict | None:
+    if len(weekly_mileage) < 2:
+        return None
+
+    recent = weekly_mileage[0]["distance_km"]
+    prior = weekly_mileage[1]["distance_km"]
+    if prior <= 0:
+        return None
+
+    delta_pct = ((recent - prior) / prior) * 100.0
+    return {
+        "recent_km": recent,
+        "prior_km": prior,
+        "delta_pct": round(delta_pct, 1),
+    }
+
+
+def _progress_signal(
+    *,
+    goal_preview: dict | None,
+    vdot: dict | None,
+    rei_trend: dict | None,
+    weekly_mileage: list[dict],
+    recent_run_count: int,
+    recent_distance_km: float,
+) -> dict:
+    if recent_run_count == 0:
+        return {
+            "status": "unknown",
+            "summary": "Sync run data to start tracking progress.",
+            "reason_codes": [],
+            "reasons": ["No recent runs are available in the local harness yet."],
+        }
+
+    positives = 0
+    risks = 0
+    reason_codes: list[str] = []
+    reasons: list[str] = []
+
+    if vdot:
+        positives += 1
+        reason_codes.append("vdot_ready")
+        reasons.append(f"Current VDOT {vdot['value']} gives Nyx a stable fitness anchor.")
+
+    if rei_trend and rei_trend.get("delta_vs_prior") is not None:
+        delta = float(rei_trend["delta_vs_prior"])
+        if delta >= 1:
+            positives += 1
+            reason_codes.append("rei_up")
+            reasons.append(f"Recent REI is up {delta:+.1f} versus the prior block.")
+        elif delta <= -1:
+            risks += 1
+            reason_codes.append("rei_down")
+            reasons.append(f"Recent REI is down {delta:+.1f} versus the prior block.")
+
+    weekly_change = _latest_weekly_change(weekly_mileage)
+    if weekly_change:
+        delta_pct = weekly_change["delta_pct"]
+        if delta_pct >= 20:
+            risks += 1
+            reason_codes.append("load_spike")
+            reasons.append(f"Weekly mileage jumped {abs(delta_pct):.0f}% versus last week.")
+        elif delta_pct <= -25:
+            risks += 1
+            reason_codes.append("load_drop")
+            reasons.append(f"Weekly mileage dropped {abs(delta_pct):.0f}% versus last week.")
+        else:
+            positives += 1
+            reason_codes.append("load_stable")
+            reasons.append("Weekly mileage is relatively stable right now.")
+
+    if not reasons:
+        reasons.append(f"Recent 42-day load is {recent_run_count} runs / {recent_distance_km:.1f} km.")
+
+    if positives == 0 and risks == 0:
+        status = "unknown"
+        summary = "Need more stable history to assess progress cleanly."
+    elif risks and positives:
+        status = "mixed"
+        summary = (
+            "Fitness signals are improving, but durability signals are mixed."
+            if goal_preview
+            else "Recent training signals are mixed."
+        )
+    elif risks:
+        status = "at_risk"
+        summary = "Recent training signals suggest stalled progress or elevated risk."
+    else:
+        status = "on_track"
+        summary = (
+            "Recent training signals are moving in the right direction for your stated goal."
+            if goal_preview
+            else "Recent training signals are moving in the right direction."
+        )
+
+    return {
+        "status": status,
+        "summary": summary,
+        "reason_codes": reason_codes,
+        "reasons": reasons[:3],
+    }
+
+
+def _safety_signal(
+    *,
+    flags: list[str],
+    rei_trend: dict | None,
+    weekly_mileage: list[dict],
+    recent_run_count: int,
+) -> dict:
+    if recent_run_count == 0 and not flags:
+        return {
+            "status": "unknown",
+            "summary": "Need run history before safety risk can be assessed.",
+            "reason_codes": [],
+            "reasons": ["No recent training history is available yet."],
+        }
+
+    severity = 0
+    reason_codes: list[str] = []
+    reasons: list[str] = []
+
+    severe_flags = [flag for flag in flags if flag in _SEVERE_SAFETY_FLAGS]
+    caution_flags = [flag for flag in flags if flag in _CAUTION_SAFETY_FLAGS]
+
+    if severe_flags:
+        severity = max(severity, 2)
+        reason_codes.extend(sorted(severe_flags))
+        reasons.append("Onboarding flagged current pain or significant injury history.")
+    elif caution_flags:
+        severity = max(severity, 1)
+        reason_codes.extend(sorted(caution_flags))
+        reasons.append("Onboarding surfaced recovery or injury caution flags.")
+
+    weekly_change = _latest_weekly_change(weekly_mileage)
+    if weekly_change:
+        delta_pct = weekly_change["delta_pct"]
+        if delta_pct >= 35:
+            severity = max(severity, 2)
+            reason_codes.append("load_spike_severe")
+            reasons.append(f"Weekly mileage jumped {abs(delta_pct):.0f}% versus last week.")
+        elif delta_pct >= 20:
+            severity = max(severity, 1)
+            reason_codes.append("load_spike")
+            reasons.append(f"Weekly mileage jumped {abs(delta_pct):.0f}% versus last week.")
+
+    if rei_trend and rei_trend.get("delta_vs_prior") is not None and float(rei_trend["delta_vs_prior"]) <= -2:
+        severity = max(severity, 1)
+        reason_codes.append("rei_decline")
+        reasons.append("REI is trending down enough to warrant a recovery check.")
+
+    if severity >= 2:
+        status = "at_risk"
+        summary = "Current data suggests elevated safety risk or a need for extra caution."
+    elif severity == 1:
+        status = "mixed"
+        summary = "Recovery and safety signals need a closer look before adding stress."
+    else:
+        status = "on_track"
+        summary = "No immediate safety warnings are showing up in current data."
+        if not reasons:
+            reasons.append("Recent load and recovery signals do not show an obvious warning.")
+
+    return {
+        "status": status,
+        "summary": summary,
+        "reason_codes": reason_codes,
+        "reasons": reasons[:3],
+    }
+
+
+def _coach_status_next_action(progress: dict, quality: dict, safety: dict) -> dict:
+    if safety["status"] == "at_risk":
+        return {
+            "action": "athlete",
+            "label": "Review Athlete State",
+            "reason": "Check load, recovery, and injury signals before making the next training call.",
+        }
+    if quality["status"] == "at_risk":
+        return {
+            "action": "diagnostics",
+            "label": "Open Diagnostics",
+            "reason": "Guidance quality feedback is degraded enough to compare against eval output.",
+        }
+    if quality["status"] == "unknown":
+        return {
+            "action": "coach",
+            "label": "Open Coach",
+            "reason": "Ask a concrete training question and rate whether the answer is grounded.",
+        }
+    if progress["status"] in {"mixed", "at_risk", "unknown"}:
+        return {
+            "action": "athlete",
+            "label": "Review Athlete State",
+            "reason": "Look at the recent trend details before changing training.",
+        }
+    return {
+        "action": "coach",
+        "label": "Open Coach",
+        "reason": "Recent signals look stable; ask the next training question.",
+    }
+
+
+def _build_coach_status(
+    conn,
+    *,
+    vdot: dict | None,
+    rei_trend: dict | None,
+    weekly_mileage: list[dict],
+    recent_run_count: int,
+    recent_distance_km: float,
+) -> tuple[dict | None, dict]:
+    goal_preview = _goal_preview(conn)
+    quality = _coach_feedback_summary(conn, limit=10)
+    progress = _progress_signal(
+        goal_preview=goal_preview,
+        vdot=vdot,
+        rei_trend=rei_trend,
+        weekly_mileage=weekly_mileage,
+        recent_run_count=recent_run_count,
+        recent_distance_km=recent_distance_km,
+    )
+    safety = _safety_signal(
+        flags=_onboarding_flags(conn),
+        rei_trend=rei_trend,
+        weekly_mileage=weekly_mileage,
+        recent_run_count=recent_run_count,
+    )
+
+    return goal_preview, {
+        "progress": progress,
+        "quality": quality,
+        "safety": safety,
+        "next_action": _coach_status_next_action(progress, quality, safety),
+    }
+
+
 def _next_action(status: dict) -> dict:
     if status["total_runs"] == 0:
         return {
@@ -264,6 +607,8 @@ def _athlete_summary(conn) -> dict:
     status = health.collect_status(conn)
     recent_run_count, recent_distance_km = _recent_load(runs, days=42)
     vdot = _current_vdot_payload(conn)
+    rei_trend = _rei_trend(runs)
+    weekly_mileage = _weekly_mileage(runs)
     hr_zones = _parse_hr_zones(conn)
     zone_2 = None
     if hr_zones:
@@ -271,6 +616,14 @@ def _athlete_summary(conn) -> dict:
             if zone.get("zone") == 2:
                 zone_2 = zone
                 break
+    goal_preview, coach_status = _build_coach_status(
+        conn,
+        vdot=vdot,
+        rei_trend=rei_trend,
+        weekly_mileage=weekly_mileage,
+        recent_run_count=recent_run_count,
+        recent_distance_km=recent_distance_km,
+    )
 
     return {
         "total_runs": status["total_runs"],
@@ -279,13 +632,15 @@ def _athlete_summary(conn) -> dict:
         "recent_42d_runs": recent_run_count,
         "recent_42d_distance_km": round(recent_distance_km, 1),
         "ae_baseline": float(status["ae_baseline"]) if status["ae_baseline"] else None,
-        "rei_trend": _rei_trend(runs),
-        "weekly_mileage": _weekly_mileage(runs),
+        "rei_trend": rei_trend,
+        "weekly_mileage": weekly_mileage,
         "vdot": vdot,
         "hr_zones": hr_zones,
         "zone_2": zone_2,
         "last_sync_status": status["last_sync_status"],
         "last_sync_completed_at": status["last_sync_completed_at"],
+        "goal_preview": goal_preview,
+        "coach_status": coach_status,
         "next_action": _next_action(status),
     }
 
@@ -305,6 +660,7 @@ def _coach_context_summary(conn) -> dict:
         "interval_pace": vdot["interval_pace"] if vdot else None,
         "zone_2": zone_2,
         "last_sync_completed_at": store.get_meta(conn, "last_sync_completed_at"),
+        "quality_summary": _coach_feedback_summary(conn, limit=10),
     }
 
 
@@ -352,21 +708,56 @@ def _serialize_coach_thread(row) -> dict:
     }
 
 
-def _serialize_coach_message(row) -> dict:
+def _serialize_coach_feedback(row) -> dict:
     return {
+        "id": row["id"],
+        "thread_id": row["thread_id"],
+        "message_id": row["message_id"],
+        "verdict": row["verdict"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _serialize_structured_message(conn, content: str) -> dict | None:
+    verdict, evidence_lines, next_step = _parse_coach_sections(content)
+    if "verdict:" not in content.lower() and not evidence_lines and not next_step:
+        return None
+
+    return {
+        "verdict": verdict,
+        "evidence": [_evidence_item(conn, line) for line in evidence_lines],
+        "next_step": next_step,
+    }
+
+
+def _serialize_coach_message(conn, row, feedback_by_message_id: dict[int, object]) -> dict:
+    payload = {
         "id": row["id"],
         "thread_id": row["thread_id"],
         "role": row["role"],
         "content": row["content"],
         "created_at": row["created_at"],
     }
+    feedback = feedback_by_message_id.get(int(row["id"]))
+    if feedback is not None:
+        payload["feedback"] = _serialize_coach_feedback(feedback)
+    if row["role"] == "assistant":
+        structured = _serialize_structured_message(conn, row["content"])
+        if structured is not None:
+            payload["structured"] = structured
+    return payload
 
 
 def _coach_thread_payload(conn, thread) -> dict:
     messages = store.get_coach_messages(conn, thread["id"])
+    feedback_by_message_id = store.get_coach_feedback_map(
+        conn,
+        [int(row["id"]) for row in messages if row["role"] == "assistant"],
+    )
     return {
         "thread": _serialize_coach_thread(thread),
-        "messages": [_serialize_coach_message(row) for row in messages],
+        "messages": [_serialize_coach_message(conn, row, feedback_by_message_id) for row in messages],
         "message_count": len(messages),
     }
 
@@ -623,10 +1014,52 @@ def run_evals(request: EvalRunRequest):
             "warn": sum(1 for result in payload if result["status"] == evals.WARN),
             "fail": sum(1 for result in payload if result["status"] == evals.FAIL),
         }
-        response = {"results": payload, "counts": counts}
+        counts_by_category: dict[str, dict[str, int]] = {}
+        for result in payload:
+            category = result.get("category", "coverage")
+            bucket = counts_by_category.setdefault(category, {"pass": 0, "warn": 0, "fail": 0})
+            if result["status"] == evals.PASS:
+                bucket["pass"] += 1
+            elif result["status"] == evals.WARN:
+                bucket["warn"] += 1
+            elif result["status"] == evals.FAIL:
+                bucket["fail"] += 1
+        response = {"results": payload, "counts": counts, "counts_by_category": counts_by_category}
         if request.verbose:
             response["report"] = evals.format_eval_report(results, verbose=True)
         return response
+    finally:
+        conn.close()
+
+
+@app.post("/api/coach/feedback")
+def post_coach_feedback(request: CoachFeedbackRequest):
+    conn = _open_db()
+    try:
+        thread = store.get_coach_thread(conn, request.thread_id)
+        if thread is None:
+            raise HTTPException(status_code=404, detail="Coach thread not found.")
+
+        message = store.get_coach_message(conn, request.message_id)
+        if message is None:
+            raise HTTPException(status_code=404, detail="Coach message not found.")
+        if message["thread_id"] != request.thread_id:
+            raise HTTPException(status_code=400, detail="Message does not belong to the requested thread.")
+        if message["role"] != "assistant":
+            raise HTTPException(status_code=400, detail="Only assistant messages can be rated.")
+        if request.verdict not in _FEEDBACK_VERDICTS:
+            raise HTTPException(status_code=400, detail="Unsupported feedback verdict.")
+
+        feedback = store.set_coach_feedback(
+            conn,
+            thread_id=request.thread_id,
+            message_id=request.message_id,
+            verdict=request.verdict,
+        )
+        return {
+            "feedback": _serialize_coach_feedback(feedback),
+            "quality_summary": _coach_feedback_summary(conn, limit=10),
+        }
     finally:
         conn.close()
 
@@ -662,13 +1095,16 @@ def post_coach_message(request: CoachMessageRequest):
         session.conversation = conversation
         existing_count = len(session.conversation)
         raw_text = session.ask(request.message)
+        assistant_row = None
         for message in session.conversation[existing_count:]:
-            store.append_coach_message(
+            persisted = store.append_coach_message(
                 conn,
                 thread["id"],
                 message["role"],
                 message["content"],
             )
+            if message["role"] == "assistant":
+                assistant_row = persisted
         store.maybe_set_coach_thread_title_from_message(conn, thread["id"], request.message)
         thread = store.get_coach_thread(conn, thread["id"])
         if thread is None:
@@ -682,6 +1118,11 @@ def post_coach_message(request: CoachMessageRequest):
             "evidence": evidence,
             "next_step": next_step,
             "raw_text": raw_text,
+            "assistant_message": (
+                _serialize_coach_message(conn, assistant_row, {})
+                if assistant_row is not None
+                else None
+            ),
             "conversation": session.conversation,
             "sources": sources,
         }

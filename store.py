@@ -73,7 +73,21 @@ CREATE INDEX IF NOT EXISTS idx_coach_threads_updated_at ON coach_threads(updated
 CREATE INDEX IF NOT EXISTS idx_coach_messages_thread_id ON coach_messages(thread_id, id);
 """
 
-SCHEMA_VERSION = 4
+FEEDBACK_SCHEMA = """
+CREATE TABLE IF NOT EXISTS coach_feedback (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id  INTEGER NOT NULL REFERENCES coach_threads(id) ON DELETE CASCADE,
+    message_id INTEGER NOT NULL UNIQUE REFERENCES coach_messages(id) ON DELETE CASCADE,
+    verdict    TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_coach_feedback_thread_id ON coach_feedback(thread_id, updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_coach_feedback_verdict ON coach_feedback(verdict, updated_at DESC);
+"""
+
+SCHEMA_VERSION = 5
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
@@ -106,6 +120,12 @@ def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
     if current < 4:
         conn.executescript(COACH_SCHEMA)
         conn.execute("PRAGMA user_version = 4")
+        current = 4
+
+    if current < 5:
+        conn.executescript(FEEDBACK_SCHEMA)
+        conn.execute("PRAGMA user_version = 5")
+        current = 5
 
     conn.commit()
 
@@ -265,6 +285,17 @@ def get_coach_messages(conn: sqlite3.Connection, thread_id: int) -> list[sqlite3
     ).fetchall()
 
 
+def get_coach_message(conn: sqlite3.Connection, message_id: int) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT id, thread_id, role, content, created_at
+        FROM coach_messages
+        WHERE id = ?
+        """,
+        (message_id,),
+    ).fetchone()
+
+
 def set_active_coach_thread(conn: sqlite3.Connection, thread_id: int) -> None:
     set_meta(conn, "active_coach_thread_id", str(thread_id))
 
@@ -359,6 +390,84 @@ def maybe_set_coach_thread_title_from_message(
         (_coach_thread_title_from_message(user_message), thread_id),
     )
     conn.commit()
+
+
+def get_coach_feedback(
+    conn: sqlite3.Connection,
+    *,
+    thread_id: int | None = None,
+    limit: int = 0,
+) -> list[sqlite3.Row]:
+    query = """
+        SELECT cf.id, cf.thread_id, cf.message_id, cf.verdict, cf.created_at, cf.updated_at
+        FROM coach_feedback AS cf
+        JOIN coach_messages AS cm ON cm.id = cf.message_id
+        WHERE cm.role = 'assistant'
+    """
+    params: list[object] = []
+
+    if thread_id is not None:
+        query += " AND cf.thread_id = ?"
+        params.append(thread_id)
+
+    query += " ORDER BY cf.updated_at DESC, cf.id DESC"
+    if limit:
+        query += " LIMIT ?"
+        params.append(limit)
+
+    return conn.execute(query, tuple(params)).fetchall()
+
+
+def get_coach_feedback_map(
+    conn: sqlite3.Connection,
+    message_ids: list[int],
+) -> dict[int, sqlite3.Row]:
+    if not message_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in message_ids)
+    rows = conn.execute(
+        f"""
+        SELECT id, thread_id, message_id, verdict, created_at, updated_at
+        FROM coach_feedback
+        WHERE message_id IN ({placeholders})
+        """,
+        tuple(message_ids),
+    ).fetchall()
+    return {int(row["message_id"]): row for row in rows}
+
+
+def set_coach_feedback(
+    conn: sqlite3.Connection,
+    *,
+    thread_id: int,
+    message_id: int,
+    verdict: str,
+) -> sqlite3.Row:
+    now = _now_timestamp()
+    conn.execute(
+        """
+        INSERT INTO coach_feedback (thread_id, message_id, verdict, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(message_id) DO UPDATE SET
+            thread_id = excluded.thread_id,
+            verdict = excluded.verdict,
+            updated_at = excluded.updated_at
+        """,
+        (thread_id, message_id, verdict, now, now),
+    )
+    conn.commit()
+    row = conn.execute(
+        """
+        SELECT id, thread_id, message_id, verdict, created_at, updated_at
+        FROM coach_feedback
+        WHERE message_id = ?
+        """,
+        (message_id,),
+    ).fetchone()
+    if row is None:
+        raise RuntimeError("Failed to persist coach feedback.")
+    return row
 
 
 def get_sync_start_date(conn: sqlite3.Connection) -> str:

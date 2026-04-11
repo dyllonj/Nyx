@@ -114,6 +114,7 @@ class NyxApp(App):
     def __init__(self) -> None:
         super().__init__()
         self._chat_base_blocks: list[dict] | None = None
+        self._chat_thread_id: int | None = None
         self._chat_conversation: list[dict] = []
 
     def compose(self) -> ComposeResult:
@@ -161,6 +162,7 @@ class NyxApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self._load_chat_state()
         self._reset_chat_log()
         self._log_diag("[bold cyan]Nyx online.[/] Press [bold]s[/] to sync, [bold]d[/] for doctor, [bold]c[/] for coach.")
         self.refresh_views()
@@ -362,20 +364,46 @@ class NyxApp(App):
     def _log_diag(self, message: str) -> None:
         self.query_one("#diag-log", RichLog).write(message)
 
+    def _load_chat_state(self) -> None:
+        conn = store.open_db()
+        try:
+            thread = store.get_or_create_active_coach_thread(conn)
+            self._chat_thread_id = thread["id"]
+            self._chat_conversation = [
+                {"role": row["role"], "content": row["content"]}
+                for row in store.get_coach_messages(conn, thread["id"])
+            ]
+        finally:
+            conn.close()
+
     def _reset_chat_log(self) -> None:
         chat_log = self.query_one("#chat-log", RichLog)
         chat_log.clear()
-        chat_log.write("[bold #7fb9ff]Nyx[/] is ready. Ask about training, pacing, fatigue, readiness, or form.")
+        if not self._chat_conversation:
+            chat_log.write("[bold #7fb9ff]Nyx[/] is ready. Ask about training, pacing, fatigue, readiness, or form.")
+            return
+
+        chat_log.write(f"[bold #7fb9ff]Nyx[/] restored {len(self._chat_conversation)} saved messages.")
+        for message in self._chat_conversation:
+            if message["role"] == "user":
+                chat_log.write(f"[bold #7fb9ff]You:[/] {message['content']}")
+            else:
+                chat_log.write(f"[bold #b781ff]Nyx:[/]\n{message['content']}")
 
     def _clear_chat(self) -> None:
         self._chat_base_blocks = None
+        conn = store.open_db()
+        try:
+            thread = store.create_coach_thread(conn)
+            self._chat_thread_id = thread["id"]
+        finally:
+            conn.close()
         self._chat_conversation.clear()
         self._reset_chat_log()
-        self.notify("Coach conversation cleared.", title="Nyx")
+        self.notify("Started a new saved coach conversation.", title="Nyx")
 
     def _after_data_change(self, message: str) -> None:
         self._chat_base_blocks = None
-        self._chat_conversation.clear()
         self._reset_chat_log()
         self.refresh_views()
         self._log_diag(message)
@@ -570,6 +598,23 @@ class NyxApp(App):
 
     def _chat_completed(self, response_text: str) -> None:
         self._chat_conversation.append({"role": "assistant", "content": response_text})
+        user_prompt = self._chat_conversation[-2]["content"] if len(self._chat_conversation) >= 2 else ""
+        conn = store.open_db()
+        try:
+            thread = (
+                store.get_coach_thread(conn, self._chat_thread_id)
+                if self._chat_thread_id is not None
+                else None
+            )
+            if thread is None:
+                thread = store.get_or_create_active_coach_thread(conn)
+                self._chat_thread_id = thread["id"]
+            if user_prompt:
+                store.append_coach_message(conn, thread["id"], "user", user_prompt)
+                store.maybe_set_coach_thread_title_from_message(conn, thread["id"], user_prompt)
+            store.append_coach_message(conn, thread["id"], "assistant", response_text)
+        finally:
+            conn.close()
         self.query_one("#chat-log", RichLog).write(f"[bold #b781ff]Nyx:[/]\n{response_text}")
         self._set_chat_ready()
 
