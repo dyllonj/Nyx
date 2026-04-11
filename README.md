@@ -14,6 +14,15 @@ If you want the friendly launcher instead of the raw CLI, start with:
 python3 nyx.py
 ```
 
+If you want the new local web client, use the API server plus the Expo web app:
+
+```bash
+uvicorn server:app --reload
+cd apps/nyx-client
+npm install
+npm run web
+```
+
 ## What Nyx Does
 
 - Syncs Garmin running activities into `garmin_data.db`
@@ -89,6 +98,21 @@ What to expect:
 If you prefer the raw terminal flow, the older CLI commands still work.
 
 ## Core Commands
+
+### Local Web App
+
+```bash
+uvicorn server:app --reload
+cd apps/nyx-client
+npm install
+npm run web
+```
+
+Set a custom backend URL if needed:
+
+```bash
+export EXPO_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+```
 
 ### Data and Metrics
 

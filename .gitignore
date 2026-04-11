@@ -5,3 +5,6 @@ chroma_db/
 __pycache__/
 *.pyc
 .env
+apps/nyx-client/node_modules/
+apps/nyx-client/.expo/
+apps/nyx-client/dist/

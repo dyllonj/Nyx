@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Nyx",
+    "slug": "nyx-client",
+    "scheme": "nyx",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    }
+  }
+}
