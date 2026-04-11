@@ -15,12 +15,14 @@ Commands during chat:
     summary            — ask coach to summarize your current fitness state
 """
 import datetime
+import logging
 import os
 import sqlite3
 import sys
 
 import config
 import knowledge_base
+from logging_utils import get_logger, log_event
 import onboarding
 import store
 import vdot_zones
@@ -249,6 +251,7 @@ def build_turn_system_blocks(
 
 
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
+logger = get_logger("coach")
 
 
 def _flatten_system(blocks: list[dict]) -> str:
@@ -304,13 +307,41 @@ class CoachSession:
         system_text = _flatten_system(system_blocks)
         self.conversation.append({"role": "user", "content": user_input})
         messages = [{"role": "system", "content": system_text}] + _active_conversation(self.conversation)
-        response = self.client.chat.completions.create(
+        log_event(
+            logger,
+            logging.INFO,
+            "coach.request.started",
             model=self.model,
             max_tokens=self.max_tokens,
-            messages=messages,
+            conversation_messages=len(self.conversation),
+            user_chars=len(user_input),
         )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                messages=messages,
+            )
+        except Exception as exc:
+            log_event(
+                logger,
+                logging.ERROR,
+                "coach.request.failed",
+                model=self.model,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+            raise
         text = (response.choices[0].message.content or "").strip()
         self.conversation.append({"role": "assistant", "content": text})
+        log_event(
+            logger,
+            logging.INFO,
+            "coach.request.completed",
+            model=self.model,
+            response_chars=len(text),
+            conversation_messages=len(self.conversation),
+        )
         return text
 
 

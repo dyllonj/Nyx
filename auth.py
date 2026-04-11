@@ -1,9 +1,14 @@
+import logging
 import os
 import getpass
 from pathlib import Path
 import config
 
 from errors import DependencyError, HarnessError
+from logging_utils import get_logger, log_event
+
+
+logger = get_logger("auth")
 
 
 def get_client(
@@ -47,11 +52,20 @@ def get_client(
         try:
             client = Garmin()
             client.login(tokenstore=tokenstore)
+            log_event(logger, logging.INFO, "garmin.auth.token_login_succeeded", tokenstore=tokenstore)
             return client
         except (GarminConnectAuthenticationError, FileNotFoundError) as e:
             tokenstore_errors.append(f"{tokenstore}: {e}")
             client = None
         except Exception as e:
+            log_event(
+                logger,
+                logging.ERROR,
+                "garmin.auth.token_login_failed",
+                tokenstore=tokenstore,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             raise HarnessError(
                 "garmin_token_login_failed",
                 "Saved Garmin credentials could not be used.",
@@ -62,6 +76,7 @@ def get_client(
     # First-time or expired: credentials required
     if not email or not password:
         if not interactive:
+            log_event(logger, logging.WARNING, "garmin.auth.login_required", interactive=interactive)
             raise HarnessError(
                 "garmin_login_required",
                 "Garmin login is required before sync can continue.",
@@ -82,9 +97,23 @@ def get_client(
 
         client = Garmin(**garmin_kwargs)
         client.login(tokenstore=config.TOKENSTORE_DIR)
+        log_event(
+            logger,
+            logging.INFO,
+            "garmin.auth.login_succeeded",
+            tokenstore=config.TOKENSTORE_DIR,
+            interactive=interactive,
+        )
     except (GarminConnectAuthenticationError, GarminConnectConnectionError) as e:
         details = str(e)
         if "429" in details or "Cloudflare" in details or isinstance(e, GarminConnectConnectionError):
+            log_event(
+                logger,
+                logging.WARNING,
+                "garmin.auth.rate_limited",
+                interactive=interactive,
+                error=details,
+            )
             raise HarnessError(
                 "garmin_rate_limited",
                 "Garmin Connect is rate-limiting or blocking all login strategies.",
@@ -95,6 +124,13 @@ def get_client(
                 ),
                 details=details,
             ) from e
+        log_event(
+            logger,
+            logging.ERROR,
+            "garmin.auth.failed",
+            interactive=interactive,
+            error=details,
+        )
         raise HarnessError(
             "garmin_auth_failed",
             "Garmin authentication failed.",
@@ -102,6 +138,14 @@ def get_client(
             details=details,
         ) from e
     except Exception as e:
+        log_event(
+            logger,
+            logging.ERROR,
+            "garmin.auth.unexpected_error",
+            interactive=interactive,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         raise HarnessError(
             "garmin_login_failed",
             "Garmin login failed unexpectedly.",

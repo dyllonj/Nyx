@@ -1,7 +1,12 @@
+import logging
 import time
 
 import config
 from errors import DependencyError, HarnessError
+from logging_utils import get_logger, log_event
+
+
+logger = get_logger("fetch")
 
 
 def _rate_limit_error_type():
@@ -32,9 +37,24 @@ def _retry_garmin_call(label: str, fn, *, attempts: int = 3):
                     details=str(e),
                 ) from e
             delay = delays[min(attempt, len(delays) - 1)]
-            print(f"\n  Rate limited on {label} — waiting {delay}s before retry...")
+            log_event(
+                logger,
+                logging.WARNING,
+                "garmin.rate_limited",
+                label=label,
+                attempt=attempt + 1,
+                retry_in_sec=delay,
+            )
             time.sleep(delay)
         except Exception as e:
+            log_event(
+                logger,
+                logging.ERROR,
+                "garmin.fetch_failed",
+                label=label,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             raise HarnessError(
                 "garmin_fetch_failed",
                 f"Garmin request failed during `{label}`.",
@@ -45,7 +65,7 @@ def _retry_garmin_call(label: str, fn, *, attempts: int = 3):
 
 def fetch_running_activities(client, start_date: str) -> list[dict]:
     """Fetch running activities from a watermark date onward."""
-    print(f"Fetching activity list from {start_date}...", end="", flush=True)
+    log_event(logger, logging.INFO, "garmin.activities.fetch_started", start_date=start_date)
     activities = _retry_garmin_call(
         "activity list",
         lambda: client.get_activities_by_date(
@@ -53,12 +73,13 @@ def fetch_running_activities(client, start_date: str) -> list[dict]:
             activitytype="running",
         ),
     )
-    print(f" {len(activities)} runs found.")
+    log_event(logger, logging.INFO, "garmin.activities.fetch_completed", start_date=start_date, count=len(activities))
     return activities
 
 
 def fetch_activity_detail(client, activity_id: int) -> dict:
     """Fetch per-sample time-series data for one activity."""
+    log_event(logger, logging.DEBUG, "garmin.activity_detail.fetch_started", activity_id=activity_id)
     time.sleep(config.DETAIL_FETCH_DELAY_SEC)
     return _retry_garmin_call(
         f"activity detail {activity_id}",
@@ -68,6 +89,7 @@ def fetch_activity_detail(client, activity_id: int) -> dict:
 
 def fetch_activity_splits(client, activity_id: int) -> dict:
     """Fetch lap-level split data for one activity."""
+    log_event(logger, logging.DEBUG, "garmin.activity_splits.fetch_started", activity_id=activity_id)
     time.sleep(config.DETAIL_FETCH_DELAY_SEC)
     return _retry_garmin_call(
         f"activity splits {activity_id}",

@@ -5,16 +5,18 @@ Wraps fastembed (ONNX, no PyTorch) and ChromaDB (SQLite-backed).
 Public API: init() and retrieve() — both safe to call even if the
 knowledge base hasn't been built yet (retrieve() returns "" gracefully).
 """
-import sys
+import logging
 from typing import Optional
 
 import config
+from logging_utils import get_logger, log_event
 
 COLLECTION_NAME = "running_knowledge"
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # 22MB ONNX, 384-dim, CPU-fast
 
 _embedding_model = None
 _collection = None
+logger = get_logger("knowledge_base")
 
 
 def init() -> None:
@@ -42,14 +44,22 @@ def init() -> None:
 
         count = _collection.count()
         if count == 0:
-            print(
-                "  [Knowledge base is empty — run `python build_kb.py` to index knowledge files]",
-                file=sys.stderr,
+            log_event(
+                logger,
+                logging.WARNING,
+                "knowledge_base.empty",
+                hint="Run `python build_kb.py` to index knowledge files.",
             )
     except ImportError as e:
-        print(f"  [Knowledge base unavailable: {e} — run `pip install fastembed chromadb`]", file=sys.stderr)
+        log_event(
+            logger,
+            logging.WARNING,
+            "knowledge_base.unavailable",
+            error=str(e),
+            hint="Run `pip install fastembed chromadb`.",
+        )
     except Exception as e:
-        print(f"  [Knowledge base init warning: {e}]", file=sys.stderr)
+        log_event(logger, logging.WARNING, "knowledge_base.init_warning", error=str(e))
 
 
 def retrieve(
@@ -100,5 +110,5 @@ def retrieve(
         return "\n\n".join(chunks)
 
     except Exception as e:
-        print(f"  [Knowledge retrieval warning: {e}]", file=sys.stderr)
+        log_event(logger, logging.WARNING, "knowledge_base.retrieve_warning", error=str(e))
         return ""

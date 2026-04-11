@@ -12,6 +12,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import TypeVar
+import logging
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +22,7 @@ from pydantic import BaseModel, Field
 import coach
 import evals
 import health
+from logging_utils import get_logger, log_event
 import store
 import sync_engine
 import vdot_zones
@@ -47,6 +49,7 @@ _CAUTION_SAFETY_FLAGS = {
     "rf_sleep_restoration",
     "rf_menstrual_disruption",
 }
+logger = get_logger("server")
 
 
 class ConversationMessage(BaseModel):
@@ -838,6 +841,14 @@ def _run_sync_job(job_id: str, email: str | None, password: str | None, interact
         _with_db(lambda conn: store.append_sync_job_log(conn, job_id, message))
 
     try:
+        log_event(
+            logger,
+            logging.INFO,
+            "sync.job.started",
+            job_id=job_id,
+            interactive=interactive,
+            has_email=bool(email),
+        )
         _with_db(lambda conn: store.mark_sync_job_running(conn, job_id))
         summary = sync_engine.run_sync(
             log=log,
@@ -846,8 +857,23 @@ def _run_sync_job(job_id: str, email: str | None, password: str | None, interact
             interactive=interactive,
         )
         _with_db(lambda conn: store.complete_sync_job(conn, job_id, asdict(summary)))
+        log_event(
+            logger,
+            logging.INFO,
+            "sync.job.completed",
+            job_id=job_id,
+            **asdict(summary),
+        )
     except HarnessError as exc:
         _with_db(lambda conn: store.fail_sync_job(conn, job_id, _error_payload(exc)))
+        log_event(
+            logger,
+            logging.ERROR,
+            "sync.job.failed",
+            job_id=job_id,
+            code=exc.code,
+            message=exc.message,
+        )
     except Exception as exc:
         _with_db(
             lambda conn: store.fail_sync_job(
@@ -860,6 +886,14 @@ def _run_sync_job(job_id: str, email: str | None, password: str | None, interact
                     "details": "",
                 },
             )
+        )
+        log_event(
+            logger,
+            logging.ERROR,
+            "sync.job.failed",
+            job_id=job_id,
+            error=str(exc),
+            error_type=type(exc).__name__,
         )
 
 
@@ -1131,6 +1165,14 @@ async def start_sync(request: SyncStartRequest):
         return _require_sync_job(conn, job_id)
 
     job = await _run_db_async(create)
+    log_event(
+        logger,
+        logging.INFO,
+        "sync.job.queued",
+        job_id=job_id,
+        interactive=request.interactive,
+        has_email=bool(request.email),
+    )
 
     thread = threading.Thread(
         target=_run_sync_job,
