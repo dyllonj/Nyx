@@ -4,8 +4,13 @@ import json
 import os
 import sqlite3
 from dataclasses import dataclass
+from urllib import error, request
 
+import auth
+import coach
 import config
+import fetch
+import knowledge_base
 import store
 
 
@@ -33,6 +38,170 @@ def _meta(conn: sqlite3.Connection, key: str, default: str = "") -> str:
 def _count(conn: sqlite3.Connection, query: str) -> int:
     row = conn.execute(query).fetchone()
     return int(row[0] or 0) if row else 0
+
+
+def check_db_connection() -> dict:
+    try:
+        conn = store.open_db()
+        try:
+            conn.execute("SELECT 1").fetchone()
+            schema_version = store.get_schema_version(conn)
+        finally:
+            conn.close()
+    except Exception as e:
+        return {
+            "status": FAIL,
+            "summary": "SQLite connection failed.",
+            "details": str(e),
+        }
+
+    return {
+        "status": PASS,
+        "summary": "SQLite connection is healthy.",
+        "schema_version": schema_version,
+    }
+
+
+def check_knowledge_base() -> dict:
+    if not os.path.isdir(config.KNOWLEDGE_DB_PATH):
+        return {
+            "status": WARN,
+            "summary": "Knowledge base directory is missing.",
+            "details": "Run `python build_kb.py` to build the retrieval index.",
+        }
+
+    if not _module_available("fastembed") or not _module_available("chromadb"):
+        return {
+            "status": WARN,
+            "summary": "Knowledge base dependencies are not installed.",
+            "details": "Install `fastembed` and `chromadb` to enable retrieval checks.",
+        }
+
+    try:
+        import chromadb
+
+        client = chromadb.PersistentClient(path=config.KNOWLEDGE_DB_PATH)
+        collection = client.get_or_create_collection(
+            name=knowledge_base.COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
+        )
+        count = collection.count()
+    except Exception as e:
+        return {
+            "status": FAIL,
+            "summary": "Knowledge base probe failed.",
+            "details": str(e),
+        }
+
+    if count == 0:
+        return {
+            "status": WARN,
+            "summary": "Knowledge base is empty.",
+            "details": "Run `python build_kb.py` to index the knowledge files.",
+            "document_count": count,
+        }
+
+    return {
+        "status": PASS,
+        "summary": "Knowledge base is initialized.",
+        "document_count": count,
+    }
+
+
+def check_garmin_connectivity() -> dict:
+    if not _module_available("garminconnect"):
+        return {
+            "status": FAIL,
+            "summary": "Garmin dependency is missing.",
+            "details": "Run `pip install -r requirements.txt` to enable sync.",
+        }
+
+    try:
+        client = auth.get_client(interactive=False)
+        today = datetime.date.today().isoformat()
+        activities = fetch.fetch_running_activities(client, today)
+    except Exception as e:
+        status = WARN if getattr(e, "code", "") == "garmin_login_required" else FAIL
+        return {
+            "status": status,
+            "summary": "Garmin probe failed.",
+            "details": getattr(e, "message", str(e)),
+        }
+
+    return {
+        "status": PASS,
+        "summary": "Garmin connectivity is healthy.",
+        "activity_count_today": len(activities),
+    }
+
+
+def check_moonshot_connectivity() -> dict:
+    if not _module_available("openai"):
+        return {
+            "status": FAIL,
+            "summary": "OpenAI SDK is missing.",
+            "details": "Run `pip install -r requirements.txt` to enable coach chat.",
+        }
+
+    api_key = os.getenv("MOONSHOT_API_KEY")
+    if not api_key:
+        return {
+            "status": WARN,
+            "summary": "MOONSHOT_API_KEY is not configured.",
+            "details": "Set the key before using the coach or live evals.",
+        }
+
+    req = request.Request(
+        f"{coach._MOONSHOT_BASE_URL}/models",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    try:
+        with request.urlopen(req, timeout=5) as response:
+            status_code = response.status
+    except error.HTTPError as e:
+        status_code = e.code
+    except Exception as e:
+        return {
+            "status": FAIL,
+            "summary": "Moonshot probe failed.",
+            "details": str(e),
+        }
+
+    if status_code in {200, 401, 403}:
+        return {
+            "status": PASS if status_code == 200 else WARN,
+            "summary": "Moonshot endpoint is reachable." if status_code == 200 else "Moonshot endpoint is reachable, but authentication failed.",
+            "http_status": status_code,
+        }
+
+    return {
+        "status": FAIL,
+        "summary": "Moonshot endpoint returned an unexpected response.",
+        "http_status": status_code,
+    }
+
+
+def collect_deep_status() -> dict:
+    checks = {
+        "database": check_db_connection(),
+        "garmin_api": check_garmin_connectivity(),
+        "knowledge_base": check_knowledge_base(),
+        "moonshot_api": check_moonshot_connectivity(),
+    }
+
+    statuses = {check["status"] for check in checks.values()}
+    if FAIL in statuses:
+        overall = FAIL
+    elif WARN in statuses:
+        overall = WARN
+    else:
+        overall = PASS
+
+    return {
+        "checked_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "overall": overall,
+        "checks": checks,
+    }
 
 
 def collect_status(conn: sqlite3.Connection) -> dict:

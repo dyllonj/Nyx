@@ -33,6 +33,7 @@ The FastAPI server (`server.py`) exposes:
 |---|---|---|
 | `/api/status` | GET | Harness status |
 | `/api/doctor` | GET | Doctor checks |
+| `/api/health/deep` | GET | On-demand deep probes for DB, Garmin, knowledge base, and Moonshot |
 | `/api/athlete/summary` | GET | Core athlete state for Home and Athlete screens |
 | `/api/runs?limit=N` | GET | Recent runs list |
 | `/api/runs/{activity_id}` | GET | Run detail with laps |

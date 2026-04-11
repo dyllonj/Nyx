@@ -925,6 +925,11 @@ async def get_doctor():
     return await _run_db_async(load)
 
 
+@app.get("/api/health/deep")
+async def get_deep_health():
+    return await _run_blocking_async(health.collect_deep_status)
+
+
 @app.get("/api/athlete/summary")
 async def get_athlete_summary():
     return await _run_db_async(_athlete_summary)
