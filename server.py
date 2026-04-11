@@ -24,6 +24,7 @@ import coach
 import evals
 import health
 from logging_utils import get_logger, log_event
+import onboarding
 import store
 import sync_engine
 import training_plans
@@ -107,6 +108,12 @@ class TrainingPlanRequest(BaseModel):
     weeks: int = Field(default=8, ge=2, le=20)
     days_per_week: int = Field(default=4, ge=3, le=6)
     current_vdot: float | None = None
+
+
+class OnboardingUpdateRequest(BaseModel):
+    answers: dict[str, str] = Field(default_factory=dict)
+    current_step: int | None = Field(default=None, ge=0)
+    mode: str | None = None
 
 
 def _configured_cors_origins() -> list[str]:
@@ -665,18 +672,25 @@ def _build_coach_status(
     }
 
 
-def _next_action(status: dict) -> dict:
+def _next_action(conn, status: dict) -> dict:
+    doctor_checks = health.run_doctor(conn)
+    if any(check.status == health.FAIL for check in doctor_checks):
+        return {
+            "action": "diagnostics",
+            "label": "Open Diagnostics",
+            "reason": "One or more harness checks failed and need attention before coaching is trustworthy.",
+        }
     if status["total_runs"] == 0:
         return {
             "action": "sync",
             "label": "Sync Garmin",
             "reason": "No run data has been loaded into the local harness yet.",
         }
-    if status["last_sync_status"] == "failed":
+    if not status["onboarding_completed"]:
         return {
-            "action": "diagnostics",
-            "label": "Open Diagnostics",
-            "reason": "The last sync failed and needs attention before coaching is trustworthy.",
+            "action": "onboarding",
+            "label": "Finish Onboarding",
+            "reason": "Nyx still needs your training context and goals before coaching should start.",
         }
     if not status["current_vdot"]:
         return {
@@ -755,7 +769,7 @@ def _athlete_summary(conn) -> dict:
         "last_sync_completed_at": status["last_sync_completed_at"],
         "goal_preview": goal_preview,
         "coach_status": coach_status,
-        "next_action": _next_action(status),
+        "next_action": _next_action(conn, status),
     }
 
 
@@ -1094,6 +1108,51 @@ async def get_vdot():
     return await _run_db_async(load)
 
 
+@app.get("/api/onboarding")
+async def get_onboarding(mode: str | None = None):
+    def load(conn: sqlite3.Connection) -> dict:
+        return onboarding.get_onboarding_state(conn, mode=mode)
+
+    return await _run_db_async(load)
+
+
+@app.put("/api/onboarding")
+async def update_onboarding(request: OnboardingUpdateRequest):
+    def persist(conn: sqlite3.Connection) -> dict:
+        try:
+            return onboarding.save_onboarding_answers(
+                conn,
+                request.answers,
+                current_step=request.current_step,
+                mode=request.mode,
+            )
+        except ValueError as exc:
+            raise HarnessError(
+                "invalid_onboarding_request",
+                "The onboarding payload could not be saved.",
+                details=str(exc),
+            ) from exc
+
+    return await _run_db_async(persist)
+
+
+@app.post("/api/onboarding/complete")
+async def complete_onboarding():
+    def finalize(conn: sqlite3.Connection) -> dict:
+        return onboarding.complete_onboarding(conn)
+
+    return await _run_db_async(finalize)
+
+
+@app.post("/api/onboarding/reset")
+async def reset_onboarding():
+    def reset(conn: sqlite3.Connection) -> dict:
+        onboarding.reset_onboarding(conn)
+        return onboarding.get_onboarding_state(conn)
+
+    return await _run_db_async(reset)
+
+
 @app.get("/api/hr-zones")
 async def get_hr_zones():
     def load(conn: sqlite3.Connection) -> dict:
@@ -1234,6 +1293,12 @@ async def post_coach_feedback(request: CoachFeedbackRequest):
 @app.post("/api/coach/message")
 async def post_coach_message(request: CoachMessageRequest):
     def handle(conn: sqlite3.Connection) -> dict:
+        if onboarding.needs_onboarding(conn):
+            raise HarnessError(
+                "onboarding_required",
+                "Complete onboarding before starting a coaching conversation.",
+                hint="Open the onboarding flow in the app, or run `python cli.py onboarding`.",
+            )
         thread = _resolve_coach_thread(conn, request.thread_id)
         persisted_messages = store.get_coach_messages(conn, thread["id"])
         if persisted_messages:

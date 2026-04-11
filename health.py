@@ -352,7 +352,7 @@ def run_doctor(conn: sqlite3.Connection) -> list[CheckResult]:
         name="onboarding",
         status=PASS if onboarding_complete else WARN,
         summary="Onboarding is complete." if onboarding_complete else "Onboarding has not been completed.",
-        hint="" if onboarding_complete else "Run `python cli.py onboarding` before using the coach seriously.",
+        hint="" if onboarding_complete else "Complete onboarding in the app, or run `python cli.py onboarding`, before using the coach seriously.",
     ))
 
     return checks

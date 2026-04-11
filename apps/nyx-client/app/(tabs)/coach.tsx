@@ -75,6 +75,10 @@ type CoachThreadPayload = {
   message_count: number;
 };
 
+type OnboardingState = {
+  completed: boolean;
+};
+
 const DEFAULT_PROMPTS = [
   "What should my easy pace be right now?",
   "Am I running my easy runs too hard?",
@@ -85,13 +89,21 @@ const DEFAULT_PROMPTS = [
 export default function CoachScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const onboardingQuery = useQuery<OnboardingState>({
+    queryKey: ["onboarding"],
+    queryFn: api.getOnboarding,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
   const contextQuery = useQuery({
     queryKey: ["coach-context"],
     queryFn: api.getCoachContext,
+    enabled: onboardingQuery.data?.completed === true,
   });
   const threadQuery = useQuery<CoachThreadPayload>({
     queryKey: ["coach-thread-current"],
     queryFn: api.getCurrentCoachThread,
+    enabled: onboardingQuery.data?.completed === true,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
@@ -255,7 +267,40 @@ export default function CoachScreen() {
       : "This chat persists across refreshes and backend restarts.";
   const visibleError =
     error ??
+    (onboardingQuery.error instanceof Error ? onboardingQuery.error.message : null) ??
     (threadQuery.error instanceof Error ? threadQuery.error.message : null);
+
+  if (onboardingQuery.isLoading) {
+    return (
+      <AppFrame
+        title="Coach"
+        subtitle="Conversation stays grounded in athlete data, explicit evidence, and retrieved source labels."
+      >
+        <Surface>
+          <Text style={styles.threadMeta}>Loading onboarding state...</Text>
+        </Surface>
+      </AppFrame>
+    );
+  }
+
+  if (onboardingQuery.data?.completed === false) {
+    return (
+      <AppFrame
+        title="Coach"
+        subtitle="Conversation stays grounded in athlete data, explicit evidence, and retrieved source labels."
+        actionLabel="Finish Onboarding"
+        onActionPress={() => router.push("/onboarding?returnTo=coach" as any)}
+      >
+        <Surface tone="raised">
+          <Text style={styles.interceptKicker}>Coach locked until onboarding is done</Text>
+          <Text style={styles.interceptTitle}>Nyx needs your goals, injury history, and life context first.</Text>
+          <Text style={styles.threadMeta}>
+            The CLI already uses this profile to shape coaching. The app now uses the same saved onboarding state before it will accept coach messages.
+          </Text>
+        </Surface>
+      </AppFrame>
+    );
+  }
 
   return (
     <AppFrame
@@ -613,5 +658,20 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.body,
     fontSize: 14,
     marginTop: theme.spacing.md,
+  },
+  interceptKicker: {
+    color: theme.colors.textTertiary,
+    fontFamily: theme.fonts.mono,
+    fontSize: 12,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+  },
+  interceptTitle: {
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fonts.heading,
+    fontSize: 26,
+    lineHeight: 30,
+    marginTop: theme.spacing.md,
+    maxWidth: 560,
   },
 });

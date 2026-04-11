@@ -7,27 +7,16 @@ and builds a structured profile context block for the coach system prompt.
 
 Key design:
 - MVP flow (5 questions) by default; full flow available via FULL_ONBOARDING=1
-- Answers stored as JSON in user_meta under individual keys
+- Answers stored in user_meta under individual keys
 - Red flags surface immediately with brief coaching note
 - Profile context built from stored answers on every coach launch
 """
 
+import datetime
 import json
-import sys
 from typing import Optional
 
 import store
-
-# ─── Question loading ─────────────────────────────────────────────────────────
-
-_QUESTIONS_PATH = "onboarding_questions.json"
-
-def _load_questions() -> dict:
-    try:
-        with open(_QUESTIONS_PATH) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
 
 
 # ─── Red flag definitions ─────────────────────────────────────────────────────
@@ -82,14 +71,13 @@ _RED_FLAG_MESSAGES = {
     ),
 }
 
-# Simple keyword triggers for red flag detection from free-text answers
 _RED_FLAG_TRIGGERS = {
     "rf_current_pain": [
         "pain", "hurts", "hurting", "aching", "sore knee", "sore hip",
         "sore ankle", "sharp", "swollen", "limping",
     ],
     "rf_stress_fracture": ["stress fracture", "stress fx", "bone stress"],
-    "rf_multiple_injuries": [],  # handled by follow-up logic
+    "rf_multiple_injuries": [],
     "rf_reds_pattern": [
         "don't eat enough", "not eating enough", "restrict", "low cal",
         "diet", "lose weight while training",
@@ -110,18 +98,17 @@ _RED_FLAG_TRIGGERS = {
 
 
 def _detect_red_flags(text: str) -> list[str]:
-    """Scan free-text answer for red flag keywords. Returns list of flag IDs."""
     flags = []
     lower = text.lower()
     for flag_id, keywords in _RED_FLAG_TRIGGERS.items():
-        for kw in keywords:
-            if kw in lower:
+        for keyword in keywords:
+            if keyword in lower:
                 flags.append(flag_id)
                 break
     return flags
 
 
-# ─── MVP question flow ────────────────────────────────────────────────────────
+# ─── Question flow ────────────────────────────────────────────────────────────
 
 _MVP_QUESTIONS = [
     {
@@ -165,7 +152,6 @@ _MVP_QUESTIONS = [
     },
 ]
 
-# Additional questions for full onboarding flow
 _FULL_QUESTIONS = _MVP_QUESTIONS + [
     {
         "key": "onboarding_experience",
@@ -207,20 +193,183 @@ _FULL_QUESTIONS = _MVP_QUESTIONS + [
     },
 ]
 
+_ONBOARDING_VERSION = "1"
+_ONBOARDING_MODE_KEY = "onboarding_mode"
+_ONBOARDING_CURRENT_STEP_KEY = "onboarding_current_step"
+_ONBOARDING_STARTED_AT_KEY = "onboarding_started_at"
+_ONBOARDING_UPDATED_AT_KEY = "onboarding_updated_at"
+_ONBOARDING_VERSION_KEY = "onboarding_version"
+_ONBOARDING_PROGRESS_KEYS = (
+    _ONBOARDING_MODE_KEY,
+    _ONBOARDING_CURRENT_STEP_KEY,
+    _ONBOARDING_STARTED_AT_KEY,
+    _ONBOARDING_UPDATED_AT_KEY,
+    _ONBOARDING_VERSION_KEY,
+    "onboarding_red_flags",
+)
+_VALID_MODES = {"mvp", "full"}
+_ALL_QUESTIONS = tuple(_FULL_QUESTIONS)
+_QUESTION_KEYS = tuple(question["key"] for question in _ALL_QUESTIONS)
+_QUESTION_BY_KEY = {question["key"]: question for question in _ALL_QUESTIONS}
+
+
+# ─── Shared state helpers ─────────────────────────────────────────────────────
+
+def _now_timestamp() -> str:
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def _normalize_mode(mode: str | None) -> str:
+    normalized = (mode or "").strip().lower()
+    if normalized in _VALID_MODES:
+        return normalized
+    return "mvp"
+
+
+def _questions_for_mode(mode: str | None) -> list[dict]:
+    normalized = _normalize_mode(mode)
+    if normalized == "full":
+        return [dict(question) for question in _FULL_QUESTIONS]
+    return [dict(question) for question in _MVP_QUESTIONS]
+
+
+def _current_mode(conn, mode: str | None = None) -> str:
+    if mode is not None:
+        return _normalize_mode(mode)
+    return _normalize_mode(store.get_meta(conn, _ONBOARDING_MODE_KEY))
+
+
+def _all_answers(conn) -> dict[str, str]:
+    return {key: store.get_meta(conn, key) or "" for key in _QUESTION_KEYS}
+
+
+def _active_red_flags_from_answers(answers: dict[str, str]) -> list[str]:
+    flags: list[str] = []
+    for key in _QUESTION_KEYS:
+        answer = answers.get(key, "")
+        if not answer:
+            continue
+        for flag in _detect_red_flags(answer):
+            if flag not in flags:
+                flags.append(flag)
+    return flags
+
+
+def _flag_messages(flag_ids: list[str]) -> list[dict]:
+    return [
+        {"id": flag_id, "message": _RED_FLAG_MESSAGES[flag_id]}
+        for flag_id in flag_ids
+        if flag_id in _RED_FLAG_MESSAGES
+    ]
+
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
+def get_onboarding_questions(full: bool = False) -> list[dict]:
+    return _questions_for_mode("full" if full else "mvp")
+
+
+def get_onboarding_state(conn, mode: str | None = None) -> dict:
+    active_mode = _current_mode(conn, mode)
+    questions = _questions_for_mode(active_mode)
+    answers = _all_answers(conn)
+    active_answers = {question["key"]: answers.get(question["key"], "") for question in questions}
+    active_red_flags = _active_red_flags_from_answers(answers)
+    current_step_raw = store.get_meta(conn, _ONBOARDING_CURRENT_STEP_KEY)
+    try:
+        current_step = int(current_step_raw) if current_step_raw is not None else 0
+    except ValueError:
+        current_step = 0
+    if questions:
+        current_step = max(0, min(current_step, len(questions) - 1))
+    else:
+        current_step = 0
+
+    return {
+        "completed": store.get_meta(conn, "onboarding_completed") == "1",
+        "mode": active_mode,
+        "current_step": current_step,
+        "steps": questions,
+        "answers": active_answers,
+        "active_red_flags": active_red_flags,
+        "active_flag_messages": _flag_messages(active_red_flags),
+        "started_at": store.get_meta(conn, _ONBOARDING_STARTED_AT_KEY),
+        "updated_at": store.get_meta(conn, _ONBOARDING_UPDATED_AT_KEY),
+        "version": store.get_meta(conn, _ONBOARDING_VERSION_KEY) or _ONBOARDING_VERSION,
+    }
+
+
+def save_onboarding_answers(
+    conn,
+    answers: dict[str, str],
+    *,
+    current_step: int | None = None,
+    mode: str | None = None,
+) -> dict:
+    active_mode = _current_mode(conn, mode)
+    now = _now_timestamp()
+    previous_flags = _active_red_flags_from_answers(_all_answers(conn))
+
+    if store.get_meta(conn, _ONBOARDING_STARTED_AT_KEY) is None:
+        store.set_meta(conn, _ONBOARDING_STARTED_AT_KEY, now)
+    store.set_meta(conn, _ONBOARDING_UPDATED_AT_KEY, now)
+    store.set_meta(conn, _ONBOARDING_MODE_KEY, active_mode)
+    store.set_meta(conn, _ONBOARDING_VERSION_KEY, _ONBOARDING_VERSION)
+
+    if current_step is not None:
+        store.set_meta(conn, _ONBOARDING_CURRENT_STEP_KEY, str(max(0, current_step)))
+
+    for key, value in answers.items():
+        if key not in _QUESTION_BY_KEY:
+            raise ValueError(f"Unknown onboarding answer key: {key}")
+        store.set_meta(conn, key, (value or "").strip())
+
+    active_red_flags = _active_red_flags_from_answers(_all_answers(conn))
+    store.set_meta(conn, "onboarding_red_flags", json.dumps(active_red_flags))
+
+    state = get_onboarding_state(conn, mode=active_mode)
+    state["new_flag_messages"] = _flag_messages(
+        [flag for flag in active_red_flags if flag not in previous_flags]
+    )
+    return state
+
+
+def complete_onboarding(conn, *, mode: str | None = None) -> dict:
+    active_mode = _current_mode(conn, mode)
+    questions = _questions_for_mode(active_mode)
+    missing_answers = {
+        question["key"]: ""
+        for question in questions
+        if store.get_meta(conn, question["key"]) is None
+    }
+    save_onboarding_answers(
+        conn,
+        missing_answers,
+        current_step=max(0, len(questions) - 1),
+        mode=active_mode,
+    )
+    store.set_meta(conn, "onboarding_completed", "1")
+    state = get_onboarding_state(conn, mode=active_mode)
+    state["profile_context"] = build_profile_context(conn)
+    return state
+
+
+def reset_onboarding(conn, *, clear_answers: bool = True) -> None:
+    keys_to_clear = list(_ONBOARDING_PROGRESS_KEYS)
+    if clear_answers:
+        keys_to_clear.extend(_QUESTION_KEYS)
+    store.delete_meta(conn, *keys_to_clear)
+    store.set_meta(conn, "onboarding_completed", "0")
+    store.set_meta(conn, "onboarding_red_flags", "[]")
+
+
 def needs_onboarding(conn) -> bool:
-    """True if the user hasn't completed onboarding yet."""
     return store.get_meta(conn, "onboarding_completed") != "1"
 
 
 def run_onboarding(conn, full: bool = False) -> None:
-    """
-    Run the conversational onboarding flow.
-    Stores all answers in user_meta and sets onboarding_completed=1 when done.
-    """
-    questions = _FULL_QUESTIONS if full else _MVP_QUESTIONS
+    mode = "full" if full else "mvp"
+    questions = get_onboarding_questions(full=full)
 
     print("\n" + "═" * 60)
     print("  GETTING TO KNOW YOU")
@@ -233,53 +382,37 @@ def run_onboarding(conn, full: bool = False) -> None:
     )
     print("═" * 60 + "\n")
 
-    active_red_flags = []
+    save_onboarding_answers(conn, {}, current_step=0, mode=mode)
 
-    for i, q in enumerate(questions):
-        print(f"  ({i+1}/{len(questions)}) {q['text']}\n")
+    for i, question in enumerate(questions):
+        print(f"  ({i+1}/{len(questions)}) {question['text']}\n")
         try:
             answer = input("You: ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\n[Onboarding interrupted — you can complete it later]\n")
             return
 
-        if answer.lower() == "skip" or not answer:
-            store.set_meta(conn, q["key"], "")
-            print()
-            continue
+        stored_answer = "" if answer.lower() == "skip" or not answer else answer
+        save_result = save_onboarding_answers(
+            conn,
+            {question["key"]: stored_answer},
+            current_step=min(i + 1, len(questions) - 1),
+            mode=mode,
+        )
 
-        store.set_meta(conn, q["key"], answer)
-
-        # Check for red flags in the answer
-        flags = _detect_red_flags(answer)
-        for flag in flags:
-            if flag not in active_red_flags:
-                active_red_flags.append(flag)
-                msg = _RED_FLAG_MESSAGES.get(flag)
-                if msg:
-                    print(f"\n  {msg}\n")
-
+        for flag in save_result["new_flag_messages"]:
+            print(f"\n  {flag['message']}\n")
         print()
 
-    # Mark onboarding complete
-    store.set_meta(conn, "onboarding_completed", "1")
-    store.set_meta(conn, "onboarding_red_flags", json.dumps(active_red_flags))
+    complete_onboarding(conn, mode=mode)
 
     print("─" * 60)
     print("  Got it. Let's look at your data.\n")
 
 
 def build_profile_context(conn) -> Optional[str]:
-    """
-    Build a structured profile text block from stored onboarding answers.
-    Returns None if no answers are stored yet.
-    Called by coach.py to inject user context into the system prompt.
-    """
-    keys = [q["key"] for q in _FULL_QUESTIONS]
-    answers = {k: store.get_meta(conn, k) for k in keys}
-
-    # Filter to answered questions only
-    filled = {k: v for k, v in answers.items() if v}
+    answers = {key: store.get_meta(conn, key) for key in _QUESTION_KEYS}
+    filled = {key: value for key, value in answers.items() if value}
     if not filled:
         return None
 
@@ -290,16 +423,16 @@ def build_profile_context(conn) -> Optional[str]:
         red_flags = []
 
     label_map = {
-        "onboarding_motivation":           "Why they sought coaching",
-        "onboarding_goal":                 "Success vision / goal",
-        "onboarding_injury":               "Injury / pain history",
-        "onboarding_lifestyle":            "Life context (stress, sleep, demands)",
-        "onboarding_easy_effort":          "Easy run effort calibration",
-        "onboarding_experience":           "Running background",
-        "onboarding_race_history":         "Race history / best results",
-        "onboarding_strength":             "Strength / cross-training",
-        "onboarding_importance_confidence":"Importance / confidence (1-10)",
-        "onboarding_training_vibe":        "Training preferences / enjoyment",
+        "onboarding_motivation": "Why they sought coaching",
+        "onboarding_goal": "Success vision / goal",
+        "onboarding_injury": "Injury / pain history",
+        "onboarding_lifestyle": "Life context (stress, sleep, demands)",
+        "onboarding_easy_effort": "Easy run effort calibration",
+        "onboarding_experience": "Running background",
+        "onboarding_race_history": "Race history / best results",
+        "onboarding_strength": "Strength / cross-training",
+        "onboarding_importance_confidence": "Importance / confidence (1-10)",
+        "onboarding_training_vibe": "Training preferences / enjoyment",
     }
 
     lines = [
@@ -309,10 +442,10 @@ def build_profile_context(conn) -> Optional[str]:
     ]
 
     for key, label in label_map.items():
-        val = filled.get(key)
-        if val:
+        value = filled.get(key)
+        if value:
             lines.append(f"{label}:")
-            lines.append(f"  {val}")
+            lines.append(f"  {value}")
             lines.append("")
 
     if red_flags:

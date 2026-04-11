@@ -50,6 +50,26 @@ export const api = {
   getStatus: () => apiRequest<any>("/api/status"),
   getDoctor: () => apiRequest<any>("/api/doctor"),
   getAthleteSummary: () => apiRequest<any>("/api/athlete/summary"),
+  getOnboarding: () => apiRequest<any>("/api/onboarding"),
+  saveOnboarding: (payload: {
+    answers?: Record<string, string>;
+    current_step?: number;
+    mode?: "mvp" | "full";
+  }) =>
+    apiRequest<any>("/api/onboarding", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  completeOnboarding: () =>
+    apiRequest<any>("/api/onboarding/complete", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  resetOnboarding: () =>
+    apiRequest<any>("/api/onboarding/reset", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   getRuns: (limit = 10) => apiRequest<any>(`/api/runs?limit=${limit}`),
   getRun: (activityId: number | string) => apiRequest<any>(`/api/runs/${activityId}`),
   getCoachContext: () => apiRequest<any>("/api/coach/context"),

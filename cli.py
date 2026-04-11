@@ -387,8 +387,7 @@ def cmd_eval(args):
 def cmd_onboarding(args):
     conn = store.open_db()
     if args.reset:
-        # Clear all onboarding-related keys
-        store.set_meta(conn, "onboarding_completed", "0")
+        onboarding.reset_onboarding(conn)
         print("[Onboarding reset — answers cleared]\n")
 
     onboarding.run_onboarding(conn, full=args.full)

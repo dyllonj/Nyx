@@ -283,6 +283,16 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     conn.commit()
 
 
+def delete_meta(conn: sqlite3.Connection, *keys: str) -> None:
+    if not keys:
+        return
+    conn.executemany(
+        "DELETE FROM user_meta WHERE key = ?",
+        [(key,) for key in keys],
+    )
+    conn.commit()
+
+
 def _now_timestamp() -> str:
     return datetime.datetime.now().isoformat(timespec="seconds")
 
@@ -622,6 +632,15 @@ def get_context_hash(conn: sqlite3.Connection) -> str:
         """
     ).fetchone()
 
+    onboarding_rows = conn.execute(
+        """
+        SELECT key, value
+        FROM user_meta
+        WHERE key LIKE 'onboarding_%'
+        ORDER BY key ASC
+        """
+    ).fetchall()
+
     payload = {
         "total_runs": int(run_row["total_runs"] or 0) if run_row else 0,
         "latest_run_start": run_row["latest_run_start"] if run_row else None,
@@ -630,9 +649,7 @@ def get_context_hash(conn: sqlite3.Connection) -> str:
         "ae_baseline": get_meta(conn, "ae_baseline"),
         "current_vdot": get_meta(conn, "current_vdot"),
         "hr_zones_json": get_meta(conn, "hr_zones_json"),
-        "onboarding_completed": get_meta(conn, "onboarding_completed"),
-        "onboarding_goal": get_meta(conn, "onboarding_goal"),
-        "onboarding_red_flags": get_meta(conn, "onboarding_red_flags"),
+        "onboarding_meta": {row["key"]: row["value"] for row in onboarding_rows},
     }
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()

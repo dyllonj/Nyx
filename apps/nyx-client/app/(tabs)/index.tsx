@@ -99,6 +99,11 @@ export default function HomeScreen() {
       return;
     }
 
+    if (athlete?.next_action?.action === "onboarding") {
+      router.push("/onboarding" as any);
+      return;
+    }
+
     router.push("/coach" as any);
   }
 

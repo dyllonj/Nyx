@@ -51,6 +51,18 @@ class ContextCacheTestCase(unittest.TestCase):
 
         self.assertNotEqual(initial_hash, updated_hash)
 
+    def test_context_hash_changes_when_onboarding_answers_change(self) -> None:
+        conn = store.open_db()
+        try:
+            store.upsert_run(conn, make_run(1, 1))
+            initial_hash = store.get_context_hash(conn)
+            store.set_meta(conn, "onboarding_injury", "Left knee pain on long runs.")
+            updated_hash = store.get_context_hash(conn)
+        finally:
+            conn.close()
+
+        self.assertNotEqual(initial_hash, updated_hash)
+
     def test_build_base_system_blocks_reuses_cache_until_hash_changes(self) -> None:
         conn = store.open_db()
         try:
