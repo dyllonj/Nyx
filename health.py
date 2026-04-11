@@ -122,16 +122,16 @@ def run_doctor(conn: sqlite3.Connection) -> list[CheckResult]:
         hint="" if _module_available("garminconnect") else "Run `pip install -r requirements.txt` to enable sync.",
     ))
 
-    anthropic_ready = _module_available("anthropic")
-    anthropic_key = bool(os.getenv("ANTHROPIC_API_KEY"))
+    openai_ready = _module_available("openai")
+    moonshot_key = bool(os.getenv("MOONSHOT_API_KEY"))
     checks.append(CheckResult(
-        name="anthropic_dependency",
-        status=PASS if anthropic_ready and anthropic_key else FAIL if anthropic_ready else WARN,
-        summary="Anthropic SDK and API key are ready." if anthropic_ready and anthropic_key else (
-            "Anthropic SDK is installed but ANTHROPIC_API_KEY is not set." if anthropic_ready else "Anthropic SDK is missing."
+        name="coach_dependency",
+        status=PASS if openai_ready and moonshot_key else FAIL if openai_ready else WARN,
+        summary="OpenAI SDK and Moonshot API key are ready." if openai_ready and moonshot_key else (
+            "OpenAI SDK is installed but MOONSHOT_API_KEY is not set." if openai_ready else "OpenAI SDK is missing."
         ),
-        hint="" if anthropic_ready and anthropic_key else (
-            "Set `ANTHROPIC_API_KEY` in your environment." if anthropic_ready else "Run `pip install -r requirements.txt` to enable coach chat and evals."
+        hint="" if openai_ready and moonshot_key else (
+            "Set `MOONSHOT_API_KEY` in your environment." if openai_ready else "Run `pip install -r requirements.txt` to enable coach chat and evals."
         ),
     ))
 

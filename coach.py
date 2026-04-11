@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI Running Coach — powered by Claude Opus 4.6
+AI Running Coach — powered by Kimi 2.5
 
 Loads your full Garmin run history from the local DB and starts a
 conversational coaching session. The coach has access to all your
@@ -15,6 +15,7 @@ Commands during chat:
     summary            — ask coach to summarize your current fitness state
 """
 import datetime
+import os
 import sqlite3
 import sys
 
@@ -247,8 +248,37 @@ def build_turn_system_blocks(
     ]
 
 
+_MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
+
+
+def _flatten_system(blocks: list[dict]) -> str:
+    """Flatten Anthropic-style system blocks into a single string for OpenAI-compatible APIs."""
+    return "\n\n".join(b["text"] for b in blocks)
+
+
 def _active_conversation(conversation: list[dict]) -> list[dict]:
     return conversation[-config.COACH_MAX_CONVERSATION_MESSAGES:]
+
+
+def _make_openai_client():
+    try:
+        from openai import OpenAI
+    except ImportError as e:
+        raise DependencyError(
+            "missing_openai_dependency",
+            "Coach responses require the `openai` package.",
+            hint="Run `pip install -r requirements.txt` to enable coach chat.",
+            details=str(e),
+        ) from e
+
+    api_key = os.getenv("MOONSHOT_API_KEY")
+    if not api_key:
+        raise HarnessError(
+            "missing_moonshot_key",
+            "Coach chat requires MOONSHOT_API_KEY.",
+            hint="Export your Moonshot API key: export MOONSHOT_API_KEY=sk-...",
+        )
+    return OpenAI(base_url=_MOONSHOT_BASE_URL, api_key=api_key)
 
 
 class CoachSession:
@@ -256,21 +286,10 @@ class CoachSession:
         self,
         conn: sqlite3.Connection,
         *,
-        model: str = "claude-opus-4-6",
+        model: str = "kimi-2.5",
         max_tokens: int = 1200,
     ) -> None:
-        try:
-            import anthropic
-        except ImportError as e:
-            raise DependencyError(
-                "missing_anthropic_dependency",
-                "Coach responses require the `anthropic` package.",
-                hint="Run `pip install -r requirements.txt` to enable coach chat and evals.",
-                details=str(e),
-            ) from e
-
-        self._anthropic = anthropic
-        self.client = anthropic.Anthropic()
+        self.client = _make_openai_client()
         self.conn = conn
         self.model = model
         self.max_tokens = max_tokens
@@ -282,15 +301,15 @@ class CoachSession:
 
     def ask(self, user_input: str) -> str:
         system_blocks = build_turn_system_blocks(self.base_system_blocks, user_input)
+        system_text = _flatten_system(system_blocks)
         self.conversation.append({"role": "user", "content": user_input})
-        response = self.client.messages.create(
+        messages = [{"role": "system", "content": system_text}] + _active_conversation(self.conversation)
+        response = self.client.chat.completions.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=system_blocks,
-            messages=_active_conversation(self.conversation),
+            messages=messages,
         )
-        parts = [block.text for block in response.content if getattr(block, "type", None) == "text"]
-        text = "".join(parts).strip()
+        text = (response.choices[0].message.content or "").strip()
         self.conversation.append({"role": "assistant", "content": text})
         return text
 
@@ -299,7 +318,7 @@ def ask_coach_once(
     conn: sqlite3.Connection,
     user_input: str,
     *,
-    model: str = "claude-opus-4-6",
+    model: str = "kimi-2.5",
     max_tokens: int = 1200,
 ) -> str:
     return CoachSession(conn, model=model, max_tokens=max_tokens).ask(user_input)
@@ -308,16 +327,9 @@ def ask_coach_once(
 # ─── Conversation loop ────────────────────────────────────────────────────────
 
 def run_coach():
-    try:
-        import anthropic
-    except ImportError as e:
-        raise DependencyError(
-            "missing_anthropic_dependency",
-            "Coach chat requires the `anthropic` package.",
-            hint="Run `pip install -r requirements.txt` to enable coach chat.",
-            details=str(e),
-        ) from e
+    from openai import APIConnectionError, AuthenticationError, RateLimitError
 
+    client = _make_openai_client()
     conn = store.open_db()
 
     total_runs = len(store.get_all_runs(conn))
@@ -329,12 +341,11 @@ def run_coach():
     if onboarding.needs_onboarding(conn):
         onboarding.run_onboarding(conn)
 
-    client = anthropic.Anthropic()
     conversation: list[dict] = []
 
     print("\n" + "═" * 60)
     print("  AI RUNNING COACH")
-    print("  Powered by Claude Opus 4.6 + your Garmin data")
+    print("  Powered by Kimi 2.5 + your Garmin data")
     print("═" * 60)
     print(f"  {total_runs} runs loaded. Ask me anything about your training.")
     print("  Type 'quit' to exit, 'clear' to reset conversation.\n")
@@ -369,47 +380,36 @@ def run_coach():
             print(f"You: {user_input}")
 
         system_blocks = build_turn_system_blocks(base_system_blocks, user_input)
+        system_text = _flatten_system(system_blocks)
 
         conversation.append({"role": "user", "content": user_input})
+        messages = [{"role": "system", "content": system_text}] + _active_conversation(conversation)
 
         print("\nCoach: ", end="", flush=True)
 
         # Stream the response
         full_response = ""
         try:
-            with client.messages.stream(
-                model="claude-opus-4-6",
+            stream = client.chat.completions.create(
+                model="kimi-2.5",
                 max_tokens=2048,
-                thinking={"type": "adaptive"},
-                system=system_blocks,
-                messages=_active_conversation(conversation),
-            ) as stream:
-                for event in stream:
-                    if event.type == "content_block_delta":
-                        if event.delta.type == "text_delta":
-                            print(event.delta.text, end="", flush=True)
-                            full_response += event.delta.text
+                messages=messages,
+                stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta.content
+                if delta:
+                    print(delta, end="", flush=True)
+                    full_response += delta
 
-                final = stream.get_final_message()
-
-            # Show cache stats on first turn so user knows it's working
-            if len(conversation) == 1:
-                usage = final.usage
-                cached = getattr(usage, "cache_read_input_tokens", 0) or 0
-                created = getattr(usage, "cache_creation_input_tokens", 0) or 0
-                if created > 0:
-                    print(f"\n  [Cache: {created:,} tokens written]", flush=True)
-                elif cached > 0:
-                    print(f"\n  [Cache: {cached:,} tokens read (saved ~90% on data context)]", flush=True)
-
-        except anthropic.APIConnectionError:
-            print("\n[Connection error — check your internet and ANTHROPIC_API_KEY]")
+        except APIConnectionError:
+            print("\n[Connection error — check your internet and MOONSHOT_API_KEY]")
             conversation.pop()
             continue
-        except anthropic.AuthenticationError:
-            print("\n[Authentication error — is ANTHROPIC_API_KEY set correctly?]")
+        except AuthenticationError:
+            print("\n[Authentication error — is MOONSHOT_API_KEY set correctly?]")
             break
-        except anthropic.RateLimitError:
+        except RateLimitError:
             print("\n[Rate limited — wait a moment and try again]")
             conversation.pop()
             continue

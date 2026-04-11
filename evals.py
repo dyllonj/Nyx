@@ -141,7 +141,7 @@ def run_offline_evals(conn: sqlite3.Connection) -> list[EvalResult]:
 def run_live_evals(
     conn: sqlite3.Connection,
     *,
-    model: str = "claude-opus-4-6",
+    model: str = "kimi-2.5",
     limit: int = 0,
 ) -> list[EvalResult]:
     if not os.getenv("ANTHROPIC_API_KEY"):

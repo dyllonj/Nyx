@@ -527,44 +527,43 @@ class NyxApp(App):
         conversation_snapshot: list[dict],
     ) -> None:
         try:
-            import anthropic
+            from openai import OpenAI
         except ImportError as e:
             err = DependencyError(
-                "missing_anthropic_dependency",
-                "Coach chat requires the `anthropic` package.",
+                "missing_openai_dependency",
+                "Coach chat requires the `openai` package.",
                 hint="Run `pip install -r requirements.txt` to enable coach chat.",
                 details=str(e),
             )
             self.call_from_thread(self._chat_failed, prompt, err)
             return
 
-        if not os.getenv("ANTHROPIC_API_KEY"):
+        if not os.getenv("MOONSHOT_API_KEY"):
             err = HarnessError(
-                "missing_anthropic_key",
-                "Coach chat requires `ANTHROPIC_API_KEY`.",
-                hint="Export your API key before using the Coach tab.",
+                "missing_moonshot_key",
+                "Coach chat requires `MOONSHOT_API_KEY`.",
+                hint="Export your Moonshot API key before using the Coach tab.",
             )
             self.call_from_thread(self._chat_failed, prompt, err)
             return
 
         try:
-            client = anthropic.Anthropic()
+            client = OpenAI(base_url="https://api.moonshot.cn/v1", api_key=os.getenv("MOONSHOT_API_KEY"))
             system_blocks = coach.build_turn_system_blocks(base_blocks, prompt)
-            response = client.messages.create(
-                model="claude-opus-4-6",
+            system_text = coach._flatten_system(system_blocks)
+            messages = [{"role": "system", "content": system_text}] + coach._active_conversation(conversation_snapshot)
+            response = client.chat.completions.create(
+                model="kimi-2.5",
                 max_tokens=1400,
-                system=system_blocks,
-                messages=coach._active_conversation(conversation_snapshot),
+                messages=messages,
             )
-            text = "".join(
-                block.text for block in response.content if getattr(block, "type", None) == "text"
-            ).strip()
+            text = (response.choices[0].message.content or "").strip()
             self.call_from_thread(self._chat_completed, text)
         except Exception as e:
             err = HarnessError(
                 "coach_request_failed",
                 "Coach request failed.",
-                hint="Check network, API key, or Anthropic service health.",
+                hint="Check network, API key, or Moonshot service health.",
                 details=str(e),
             )
             self.call_from_thread(self._chat_failed, prompt, err)

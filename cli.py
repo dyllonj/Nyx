@@ -356,7 +356,7 @@ def main():
 
     ev = sub.add_parser("eval", help="Run offline or live golden-question evals")
     ev.add_argument("--live", action="store_true", help="Run live model evals in addition to offline checks")
-    ev.add_argument("--model", default="claude-opus-4-6", help="Model to use for live evals")
+    ev.add_argument("--model", default="kimi-2.5", help="Model to use for live evals")
     ev.add_argument("--limit", type=int, default=0, help="Limit live evals to the first N golden questions")
     ev.add_argument("--verbose", action="store_true", help="Print full model responses in the eval report")
 
