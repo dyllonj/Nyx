@@ -1,10 +1,12 @@
-from dataclasses import dataclass, field
-from typing import Optional
 import datetime
+from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass
-class RunSummary:
+class RunSummary(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     activity_id: int
     name: str
     start_time: datetime.datetime
