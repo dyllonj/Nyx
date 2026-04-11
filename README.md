@@ -2,6 +2,13 @@
 
 Nyx is a local-first running intelligence system. It syncs Garmin run history, computes training metrics (REI, VDOT, HR zones), builds a coaching knowledge base, and exposes everything through a web UI and CLI.
 
+Current implementation assumptions:
+
+- SQLite remains the only persistence layer.
+- FastAPI is the first async target; CLI and Textual flows remain synchronous for now.
+- The API is intended for `localhost` or Tailscale/LAN use, not direct internet exposure.
+- A single bearer token is sufficient for API authentication in this deployment model.
+
 ## Architecture
 
 Nyx has two layers:
@@ -17,23 +24,6 @@ The design spec is in [docs/web-app-build-spec.md](docs/web-app-build-spec.md).
 - TanStack Query for data fetching
 - Monochrome dark design system (Space Grotesk / IBM Plex Sans / IBM Plex Mono)
 - Custom `AppFrame` shell with bottom tabs (compact) and left rail (wide)
-
-### Known issue: CSSStyleDeclaration error on web
-
-The Expo web client currently crashes on launch with:
-
-```
-Failed to set an indexed property [0] on 'CSSStyleDeclaration': Indexed property setter is not supported.
-```
-
-This is a compatibility issue between `react-native-web@0.21` and React 19. React 19's style reconciler iterates style objects with `for...in` and tries to set numeric keys (like `"0"`) on `CSSStyleDeclaration`, which browsers reject. The root cause is in how `react-native-web` resolves `StyleSheet` objects into DOM props — under React 19, inline style values that previously worked now trigger the browser's indexed property setter guard.
-
-Downgrading to React 18 is not viable because `expo-router@6` uses `React.use()`, which requires React 19.
-
-Potential fixes:
-- Upgrade `react-native-web` when a release ships with React 19 style reconciliation support
-- Patch `react-native-web` locally to filter numeric keys from inline style objects before they reach React DOM
-- Pin to an Expo SDK / react-native-web combination where this is resolved upstream
 
 ### Backend API
 
