@@ -146,6 +146,15 @@ cd apps/nyx-client
 npm install
 ```
 
+Optional API auth:
+
+```bash
+export NYX_API_TOKEN=replace-me
+export EXPO_PUBLIC_API_TOKEN=replace-me
+```
+
+If `NYX_API_TOKEN` is set, Nyx requires `Authorization: Bearer <token>` on `/api/*` requests. CORS is restricted to localhost by default, plus Tailscale/LAN-style origins via regex. Override explicit origins with `NYX_CORS_ORIGINS=origin1,origin2`.
+
 ## What Nyx Computes
 
 - REI (Run Efficiency Index)

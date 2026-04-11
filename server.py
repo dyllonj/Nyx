@@ -13,6 +13,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import TypeVar
 import logging
+import os
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +35,22 @@ _SOURCE_RE = re.compile(r"\[Source:\s*([^\]]+)\]")
 _ROOT_DIR = Path(__file__).resolve().parent
 _WEB_DIST_DIR = _ROOT_DIR / "apps" / "nyx-client" / "dist"
 _FEEDBACK_VERDICTS = ("helpful", "too_generic", "not_grounded", "unsafe")
+_DEFAULT_CORS_ORIGINS = [
+    "http://127.0.0.1:8081",
+    "http://localhost:8081",
+    "http://127.0.0.1:19006",
+    "http://localhost:19006",
+]
+_LOCAL_ORIGIN_REGEX = (
+    r"^https?://("
+    r"(localhost|127\.0\.0\.1)"
+    r"|([a-zA-Z0-9-]+\.)*ts\.net"
+    r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|192\.168\.\d{1,3}\.\d{1,3}"
+    r"|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}"
+    r"|100\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r")(:\d+)?$"
+)
 _STATUS_RANK = {
     "unknown": 0,
     "on_track": 1,
@@ -84,6 +101,29 @@ class SyncStartRequest(BaseModel):
     interactive: bool = False
 
 
+def _configured_cors_origins() -> list[str]:
+    raw = os.getenv("NYX_CORS_ORIGINS", "")
+    if not raw.strip():
+        return list(_DEFAULT_CORS_ORIGINS)
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def _configured_api_token() -> str | None:
+    token = os.getenv("NYX_API_TOKEN", "").strip()
+    return token or None
+
+
+def _is_authorized_request(auth_header: str | None) -> bool:
+    token = _configured_api_token()
+    if token is None:
+        return True
+    if not auth_header:
+        return False
+
+    scheme, _, credentials = auth_header.partition(" ")
+    return scheme.lower() == "bearer" and credentials == token
+
+
 app = FastAPI(
     title="Nyx Local API",
     version="0.1.0",
@@ -91,7 +131,8 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_configured_cors_origins(),
+    allow_origin_regex=_LOCAL_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,6 +153,28 @@ def _error_payload(exc: HarnessError) -> dict:
 @app.exception_handler(HarnessError)
 async def handle_harness_error(_, exc: HarnessError):
     return JSONResponse(status_code=400, content={"error": _error_payload(exc)})
+
+
+@app.middleware("http")
+async def enforce_api_auth(request, call_next):
+    if request.method == "OPTIONS" or not request.url.path.startswith("/api"):
+        return await call_next(request)
+
+    if _is_authorized_request(request.headers.get("Authorization")):
+        return await call_next(request)
+
+    return JSONResponse(
+        status_code=401,
+        headers={"WWW-Authenticate": "Bearer"},
+        content={
+            "error": {
+                "code": "unauthorized",
+                "message": "Invalid or missing API token.",
+                "hint": "Set NYX_API_TOKEN on the server and send it as a Bearer token.",
+                "details": "",
+            }
+        },
+    )
 
 
 def _with_db(callback: Callable[[sqlite3.Connection], DbResult]) -> DbResult:

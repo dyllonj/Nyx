@@ -1,5 +1,10 @@
 const DEFAULT_API_PORT = "8765";
 
+function resolveApiToken(): string | null {
+  const token = process.env.EXPO_PUBLIC_API_TOKEN?.trim();
+  return token ? token : null;
+}
+
 function resolveApiBaseUrl(): string {
   if (process.env.EXPO_PUBLIC_API_BASE_URL) {
     return process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -17,12 +22,14 @@ function resolveApiBaseUrl(): string {
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
+const API_TOKEN = resolveApiToken();
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {}),
       ...(init?.headers ?? {}),
     },
   });
