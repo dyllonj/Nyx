@@ -1,3 +1,4 @@
+import datetime
 import sqlite3
 import statistics
 from typing import Optional
@@ -46,13 +47,47 @@ CREATE TABLE IF NOT EXISTS user_meta (
 );
 """
 
+INDEX_SCHEMA = """
+CREATE INDEX IF NOT EXISTS idx_runs_start_time ON runs(start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_runs_detail_fetched ON runs(detail_fetched, start_time DESC);
+CREATE INDEX IF NOT EXISTS idx_laps_activity_id ON laps(activity_id, lap_index);
+"""
+
+SCHEMA_VERSION = 2
+
+
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
+    current = conn.execute("PRAGMA user_version").fetchone()[0]
+
+    if current == 0:
+        conn.executescript(SCHEMA)
+        conn.execute("PRAGMA user_version = 1")
+        current = 1
+
+    if current < 2:
+        conn.executescript(INDEX_SCHEMA)
+        conn.execute("PRAGMA user_version = 2")
+
+    conn.commit()
+
 
 def open_db() -> sqlite3.Connection:
     conn = sqlite3.connect(config.DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.executescript(SCHEMA)
-    conn.commit()
+    _apply_schema_migrations(conn)
     return conn
+
+
+def get_schema_version(conn: sqlite3.Connection) -> int:
+    return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
 
 def upsert_run(conn: sqlite3.Connection, run: RunSummary, detail_fetched: bool = False) -> None:
@@ -71,6 +106,14 @@ def upsert_run(conn: sqlite3.Connection, run: RunSummary, detail_fetched: bool =
         )
         ON CONFLICT(activity_id) DO UPDATE SET
             name = excluded.name,
+            start_time = excluded.start_time,
+            duration_sec = excluded.duration_sec,
+            distance_m = excluded.distance_m,
+            calories = excluded.calories,
+            avg_hr = excluded.avg_hr,
+            max_hr = excluded.max_hr,
+            avg_speed_ms = excluded.avg_speed_ms,
+            pace_min_per_km = excluded.pace_min_per_km,
             avg_cadence_spm = excluded.avg_cadence_spm,
             avg_vertical_osc_cm = excluded.avg_vertical_osc_cm,
             avg_ground_contact_ms = excluded.avg_ground_contact_ms,
@@ -159,6 +202,51 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
         (key, value),
     )
     conn.commit()
+
+
+def get_sync_start_date(conn: sqlite3.Connection) -> str:
+    watermark = get_meta(conn, "sync_watermark_date")
+    if not watermark:
+        return "2000-01-01"
+
+    try:
+        watermark_date = datetime.date.fromisoformat(watermark)
+    except ValueError:
+        return "2000-01-01"
+
+    start_date = watermark_date - datetime.timedelta(days=config.SYNC_LOOKBACK_DAYS)
+    return start_date.isoformat()
+
+
+def mark_sync_started(conn: sqlite3.Connection) -> None:
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    set_meta(conn, "last_sync_started_at", now)
+    set_meta(conn, "last_sync_status", "running")
+    set_meta(conn, "last_sync_error", "")
+
+
+def mark_sync_failed(conn: sqlite3.Connection, error_message: str) -> None:
+    set_meta(conn, "last_sync_status", "failed")
+    set_meta(conn, "last_sync_error", error_message)
+
+
+def mark_sync_completed(
+    conn: sqlite3.Connection,
+    *,
+    new_runs: int,
+    detail_failures: int,
+) -> None:
+    now = datetime.datetime.now().isoformat(timespec="seconds")
+    set_meta(conn, "last_sync_completed_at", now)
+    set_meta(conn, "last_sync_status", "success")
+    set_meta(conn, "last_sync_error", "")
+    set_meta(conn, "last_sync_new_runs", str(new_runs))
+    set_meta(conn, "last_sync_detail_failures", str(detail_failures))
+
+    row = conn.execute("SELECT MAX(date(start_time)) AS max_date FROM runs").fetchone()
+    watermark = row["max_date"] if row and row["max_date"] else None
+    if watermark:
+        set_meta(conn, "sync_watermark_date", watermark)
 
 
 def compute_and_store_ae_baseline(conn: sqlite3.Connection) -> Optional[float]:

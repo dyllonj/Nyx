@@ -1,39 +1,78 @@
 import time
+
 import config
-from garminconnect import Garmin, GarminConnectTooManyRequestsError
+from errors import DependencyError, HarnessError
 
 
-def fetch_all_running_activities(client: Garmin) -> list[dict]:
-    """Fetch all running activities from the beginning of time."""
-    print("Fetching activity list...", end="", flush=True)
-    activities = client.get_activities_by_date(
-        startdate="2000-01-01",
-        activitytype="running",
+def _rate_limit_error_type():
+    try:
+        from garminconnect import GarminConnectTooManyRequestsError
+    except ImportError as e:
+        raise DependencyError(
+            "missing_garmin_dependency",
+            "Garmin sync requires the `python-garminconnect` package.",
+            hint="Run `pip install -r requirements.txt` to enable Garmin sync.",
+            details=str(e),
+        ) from e
+    return GarminConnectTooManyRequestsError
+
+
+def _retry_garmin_call(label: str, fn, *, attempts: int = 3):
+    rate_limit_error = _rate_limit_error_type()
+    delays = [15, 30, 60]
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except rate_limit_error as e:
+            if attempt == attempts - 1:
+                raise HarnessError(
+                    "garmin_rate_limited",
+                    f"Garmin rate-limited the `{label}` request too many times.",
+                    hint="Wait a few minutes, then retry `python cli.py sync`.",
+                    details=str(e),
+                ) from e
+            delay = delays[min(attempt, len(delays) - 1)]
+            print(f"\n  Rate limited on {label} — waiting {delay}s before retry...")
+            time.sleep(delay)
+        except Exception as e:
+            raise HarnessError(
+                "garmin_fetch_failed",
+                f"Garmin request failed during `{label}`.",
+                hint="Retry the sync. If this keeps failing, inspect Garmin connectivity and token health.",
+                details=str(e),
+            ) from e
+
+
+def fetch_running_activities(client, start_date: str) -> list[dict]:
+    """Fetch running activities from a watermark date onward."""
+    print(f"Fetching activity list from {start_date}...", end="", flush=True)
+    activities = _retry_garmin_call(
+        "activity list",
+        lambda: client.get_activities_by_date(
+            startdate=start_date,
+            activitytype="running",
+        ),
     )
     print(f" {len(activities)} runs found.")
     return activities
 
 
-def fetch_activity_detail(client: Garmin, activity_id: int) -> dict:
+def fetch_activity_detail(client, activity_id: int) -> dict:
     """Fetch per-sample time-series data for one activity."""
     time.sleep(config.DETAIL_FETCH_DELAY_SEC)
-    try:
-        return client.get_activity_details(str(activity_id), maxchart=2000)
-    except GarminConnectTooManyRequestsError:
-        print("\n  Rate limited — waiting 30s...")
-        time.sleep(30)
-        return client.get_activity_details(str(activity_id), maxchart=2000)
+    return _retry_garmin_call(
+        f"activity detail {activity_id}",
+        lambda: client.get_activity_details(str(activity_id), maxchart=2000),
+    )
 
 
-def fetch_activity_splits(client: Garmin, activity_id: int) -> dict:
+def fetch_activity_splits(client, activity_id: int) -> dict:
     """Fetch lap-level split data for one activity."""
     time.sleep(config.DETAIL_FETCH_DELAY_SEC)
-    try:
-        return client.get_activity_splits(str(activity_id))
-    except GarminConnectTooManyRequestsError:
-        print("\n  Rate limited — waiting 30s...")
-        time.sleep(30)
-        return client.get_activity_splits(str(activity_id))
+    return _retry_garmin_call(
+        f"activity splits {activity_id}",
+        lambda: client.get_activity_splits(str(activity_id)),
+    )
 
 
 def parse_detail_metrics(detail: dict) -> dict:

@@ -2,6 +2,7 @@ TOKENSTORE_DIR = ".garmin_tokens"
 DB_PATH = "garmin_data.db"
 FETCH_BATCH_SIZE = 20
 DETAIL_FETCH_DELAY_SEC = 0.5
+SYNC_LOOKBACK_DAYS = 7
 
 # REI component weights (must sum to 1.0 when all sensors present)
 REI_WEIGHT_CADENCE = 0.30
@@ -33,3 +34,8 @@ KNOWLEDGE_DIR = "knowledge"
 KNOWLEDGE_DB_PATH = "chroma_db"
 KNOWLEDGE_RETRIEVAL_K = 4
 KNOWLEDGE_SIMILARITY_THRESHOLD = 0.4
+
+# Coach harness compaction
+COACH_WEEKLY_MILEAGE_WEEKS = 8
+COACH_RECENT_RUN_LIMIT = 35
+COACH_MAX_CONVERSATION_MESSAGES = 12

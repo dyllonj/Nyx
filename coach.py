@@ -17,8 +17,6 @@ Commands during chat:
 import datetime
 import sqlite3
 
-import anthropic
-
 import config
 import knowledge_base
 import onboarding
@@ -58,6 +56,19 @@ def build_data_context(conn: sqlite3.Connection) -> str:
     total_distance_km = sum((r["distance_m"] or 0) for r in runs) / 1000.0
     avg_rei = sum(r["rei"] for r in runs_with_rei) / len(runs_with_rei) if runs_with_rei else None
     zones_context = vdot_zones.build_zones_context(conn)
+    recent_runs = runs[:config.COACH_RECENT_RUN_LIMIT]
+    omitted_runs = max(0, total_runs - len(recent_runs))
+
+    recent_window_start = datetime.datetime.now() - datetime.timedelta(days=42)
+    recent_window_runs = []
+    for r in runs:
+        try:
+            dt = datetime.datetime.fromisoformat(r["start_time"])
+        except (ValueError, TypeError):
+            continue
+        if dt >= recent_window_start:
+            recent_window_runs.append(r)
+    recent_window_distance_km = sum((r["distance_m"] or 0) for r in recent_window_runs) / 1000.0
 
     # REI trend: last 10 vs prior 10
     rei_vals = [r["rei"] for r in runs_with_rei]
@@ -84,7 +95,7 @@ def build_data_context(conn: sqlite3.Connection) -> str:
         except (ValueError, TypeError):
             pass
 
-    sorted_weeks = sorted(weekly_km.items(), reverse=True)[:8]
+    sorted_weeks = sorted(weekly_km.items(), reverse=True)[:config.COACH_WEEKLY_MILEAGE_WEEKS]
 
     # Build the full context string
     lines = [
@@ -93,6 +104,7 @@ def build_data_context(conn: sqlite3.Connection) -> str:
         "═══════════════════════════════════════════════",
         f"Total runs logged   : {total_runs}",
         f"Total distance      : {total_distance_km:.1f} km",
+        f"Recent 42d load     : {len(recent_window_runs)} runs / {recent_window_distance_km:.1f} km",
         f"AE baseline         : {ae_baseline if ae_baseline else 'not computed yet'}",
         f"Average REI         : {_fmt_opt(avg_rei)} / 100",
         f"REI trend           : {rei_trend_str}",
@@ -105,19 +117,21 @@ def build_data_context(conn: sqlite3.Connection) -> str:
 
     lines += [
         "",
-        "── Weekly Mileage (recent 8 weeks) ──────────",
+        f"── Weekly Mileage (recent {config.COACH_WEEKLY_MILEAGE_WEEKS} weeks) ──────────",
     ]
     for week, km in sorted_weeks:
         lines.append(f"  {week}: {km:.1f} km")
 
     lines += [
         "",
-        "── Run History (most recent first) ──────────",
+        f"── Run History (most recent {len(recent_runs)} of {total_runs}) ──────────",
         f"{'Date':<12} {'Dist':>7} {'Pace':>9} {'HR':>5} {'Cad':>5} {'VOsc':>6} {'HRD':>6} {'CadCV':>6} {'REI':>5}",
         "─" * 72,
     ]
+    if omitted_runs:
+        lines.append(f"Older runs omitted from prompt: {omitted_runs}")
 
-    for r in runs:
+    for r in recent_runs:
         dist_km = (r["distance_m"] or 0) / 1000.0
         lines.append(
             f"{r['start_time'][:10]:<12} "
@@ -136,26 +150,14 @@ def build_data_context(conn: sqlite3.Connection) -> str:
         "═══════════════════════════════════════════════",
         "METRIC DEFINITIONS",
         "═══════════════════════════════════════════════",
-        "REI (Run Efficiency Index, 0-100):",
-        "  Composite of cadence, vertical oscillation, aerobic efficiency,",
-        "  and ground contact time. 100 = hitting all physiological targets.",
-        "  Scores >80 are strong; <60 indicate room for improvement.",
-        "",
-        "REI components:",
-        f"  Cadence (30%)    — target {config.CADENCE_TARGET_SPM} spm, higher = better economy",
-        f"  V.Osc (25%)      — target {config.OSCILLATION_TARGET_CM}cm, lower = less wasted vertical energy",
-        "  Aerobic Eff (30%) — pace/HR, lower = more fit (faster per heartbeat)",
-        f"  GCT (15%)        — target {config.GROUND_CONTACT_TARGET_MS}ms, shorter = more elastic return",
-        "",
-        "Other metrics:",
-        "  Dist             — distance in km",
-        "  Pace             — min:sec per km",
-        "  HR               — average heart rate (bpm)",
-        "  Cad              — cadence (steps per minute, both feet)",
-        "  VOsc             — vertical oscillation (cm)",
-        "  HRD              — HR drift % (cardiac fatigue during run, >5% = notable)",
-        "  CadCV            — cadence coefficient of variation % (form consistency, <8% = good)",
-        "  AE baseline      — user's personal aerobic efficiency benchmark (best 20% of runs)",
+        "REI              — 0-100 composite of cadence, vertical oscillation, aerobic efficiency, and ground contact time",
+        f"Cadence target   — {config.CADENCE_TARGET_SPM} spm (higher usually means better economy)",
+        f"VOsc target      — {config.OSCILLATION_TARGET_CM} cm (lower means less wasted bounce)",
+        f"GCT target       — {config.GROUND_CONTACT_TARGET_MS} ms (lower means faster elastic return)",
+        "Aerobic Eff      — pace / HR, lower is fitter",
+        "HRD              — heart-rate drift %, >5 means notable fatigue or heat load",
+        "CadCV            — cadence variation %, lower means more stable form",
+        "AE baseline      — athlete's personal aerobic-efficiency benchmark from best runs",
     ]
 
     return "\n".join(lines)
@@ -177,6 +179,7 @@ When analyzing runs:
 - Distinguish between noise (single-run variation) and signal (multi-run trends)
 - Consider context: hot weather degrades AE, fatigue shows as HR drift, illness appears as REI crash
 - Connect metrics: e.g. low cadence + high V.Osc often appear together and fix together
+- If the prompt includes VDOT, training paces, or HR zones, use those exact values rather than generic ranges
 
 When giving training recommendations:
 - Tie advice to specific upcoming runs, not abstract principles
@@ -184,12 +187,94 @@ When giving training recommendations:
 - Flag if mileage increases are outpacing recovery (check Body Battery trends if available)
 - For form coaching, explain the biomechanical reason, not just the target number
 
+Evidence and citation requirements:
+- For any non-trivial answer, include a short `Evidence:` section with 2-4 bullets
+- Every evidence bullet must cite exact athlete data: dates, run metrics, current VDOT, pace ranges, or HR zone boundaries
+- If you use retrieved coaching knowledge, cite the source label exactly as provided, e.g. `[Source: recovery]`
+- If the data is missing or ambiguous, say that explicitly instead of guessing
+
+Default response shape for substantial answers:
+Verdict: one concise paragraph
+Evidence:
+- bullet with exact evidence
+- bullet with exact evidence
+Next step: one concise paragraph
+
 Tone: direct, informed, encouraging but not sycophantic. You're a coach who knows this athlete's data cold."""
+
+
+def build_base_system_blocks(conn: sqlite3.Connection) -> list[dict]:
+    profile_context = onboarding.build_profile_context(conn)
+    data_context = build_data_context(conn)
+
+    base_system_blocks = [
+        {
+            "type": "text",
+            "text": SYSTEM_PROMPT,
+        },
+    ]
+
+    if profile_context:
+        base_system_blocks.append({
+            "type": "text",
+            "text": "\n\n" + profile_context,
+        })
+
+    base_system_blocks.append({
+        "type": "text",
+        "text": "\n\nATHLETE DATA:\n\n" + data_context,
+        "cache_control": {"type": "ephemeral"},
+    })
+    return base_system_blocks
+
+
+def build_turn_system_blocks(
+    base_system_blocks: list[dict],
+    user_input: str,
+) -> list[dict]:
+    knowledge_base.init()
+    retrieved_text = knowledge_base.retrieve(user_input)
+    if not retrieved_text:
+        return base_system_blocks
+
+    return base_system_blocks + [
+        {
+            "type": "text",
+            "text": "\n\nRELEVANT COACHING KNOWLEDGE:\n\n" + retrieved_text,
+        }
+    ]
+
+
+def _active_conversation(conversation: list[dict]) -> list[dict]:
+    return conversation[-config.COACH_MAX_CONVERSATION_MESSAGES:]
+
+
+def ask_coach_once(
+    conn: sqlite3.Connection,
+    user_input: str,
+    *,
+    model: str = "claude-opus-4-6",
+    max_tokens: int = 1200,
+) -> str:
+    import anthropic
+
+    client = anthropic.Anthropic()
+    system_blocks = build_turn_system_blocks(build_base_system_blocks(conn), user_input)
+    response = client.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=system_blocks,
+        messages=[{"role": "user", "content": user_input}],
+    )
+    parts = [block.text for block in response.content if getattr(block, "type", None) == "text"]
+    return "".join(parts).strip()
 
 
 # ─── Conversation loop ────────────────────────────────────────────────────────
 
 def run_coach():
+    import anthropic
+
     conn = store.open_db()
 
     total_runs = len(store.get_all_runs(conn))
@@ -201,9 +286,6 @@ def run_coach():
     if onboarding.needs_onboarding(conn):
         onboarding.run_onboarding(conn)
 
-    data_context = build_data_context(conn)
-    profile_context = onboarding.build_profile_context(conn)
-
     client = anthropic.Anthropic()
     conversation: list[dict] = []
 
@@ -214,29 +296,7 @@ def run_coach():
     print(f"  {total_runs} runs loaded. Ask me anything about your training.")
     print("  Type 'quit' to exit, 'clear' to reset conversation.\n")
 
-    # Initialize knowledge base (silent if not built yet)
-    knowledge_base.init()
-
-    # Base system blocks — stable across turns, Blocks 2/3 stay prompt-cached
-    _base_system_blocks = [
-        {
-            "type": "text",
-            "text": SYSTEM_PROMPT,
-        },
-    ]
-
-    # Inject profile context before data (both get cached together)
-    if profile_context:
-        _base_system_blocks.append({
-            "type": "text",
-            "text": "\n\n" + profile_context,
-        })
-
-    _base_system_blocks.append({
-        "type": "text",
-        "text": "\n\nATHLETE DATA:\n\n" + data_context,
-        "cache_control": {"type": "ephemeral"},  # cache through here
-    })
+    base_system_blocks = build_base_system_blocks(conn)
 
     while True:
         try:
@@ -265,17 +325,7 @@ def run_coach():
             )
             print(f"You: {user_input}")
 
-        # Retrieve relevant knowledge and build turn-specific system blocks
-        retrieved_text = knowledge_base.retrieve(user_input)
-        if retrieved_text:
-            system_blocks = _base_system_blocks + [
-                {
-                    "type": "text",
-                    "text": "\n\nRELEVANT COACHING KNOWLEDGE:\n\n" + retrieved_text,
-                }
-            ]
-        else:
-            system_blocks = _base_system_blocks
+        system_blocks = build_turn_system_blocks(base_system_blocks, user_input)
 
         conversation.append({"role": "user", "content": user_input})
 
@@ -289,7 +339,7 @@ def run_coach():
                 max_tokens=2048,
                 thinking={"type": "adaptive"},
                 system=system_blocks,
-                messages=conversation,
+                messages=_active_conversation(conversation),
             ) as stream:
                 for event in stream:
                     if event.type == "content_block_delta":
