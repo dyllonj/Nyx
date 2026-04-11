@@ -35,6 +35,7 @@ class ConversationMessage(BaseModel):
 
 class CoachMessageRequest(BaseModel):
     message: str = Field(min_length=1)
+    thread_id: int | None = None
     conversation: list[ConversationMessage] = Field(default_factory=list)
     model: str = "kimi-2.5"
     max_tokens: int = 1200
@@ -342,6 +343,44 @@ def _parse_coach_sections(text: str) -> tuple[str, list[str], str]:
     return verdict, evidence, next_step
 
 
+def _serialize_coach_thread(row) -> dict:
+    return {
+        "id": row["id"],
+        "title": row["title"] or None,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _serialize_coach_message(row) -> dict:
+    return {
+        "id": row["id"],
+        "thread_id": row["thread_id"],
+        "role": row["role"],
+        "content": row["content"],
+        "created_at": row["created_at"],
+    }
+
+
+def _coach_thread_payload(conn, thread) -> dict:
+    messages = store.get_coach_messages(conn, thread["id"])
+    return {
+        "thread": _serialize_coach_thread(thread),
+        "messages": [_serialize_coach_message(row) for row in messages],
+        "message_count": len(messages),
+    }
+
+
+def _resolve_coach_thread(conn, thread_id: int | None):
+    if thread_id is not None:
+        thread = store.get_coach_thread(conn, thread_id)
+        if thread is None:
+            raise HTTPException(status_code=404, detail="Coach thread not found.")
+        store.set_active_coach_thread(conn, thread_id)
+        return thread
+    return store.get_or_create_active_coach_thread(conn)
+
+
 def _evidence_item(conn, bullet: str) -> dict:
     date_match = _DATE_RE.search(bullet)
     source_match = _SOURCE_RE.search(bullet)
@@ -531,6 +570,26 @@ def get_coach_context():
         conn.close()
 
 
+@app.get("/api/coach/thread/current")
+def get_current_coach_thread():
+    conn = _open_db()
+    try:
+        thread = store.get_or_create_active_coach_thread(conn)
+        return _coach_thread_payload(conn, thread)
+    finally:
+        conn.close()
+
+
+@app.post("/api/coach/thread")
+def create_coach_thread():
+    conn = _open_db()
+    try:
+        thread = store.create_coach_thread(conn)
+        return _coach_thread_payload(conn, thread)
+    finally:
+        conn.close()
+
+
 @app.post("/api/vdot/recalc")
 def recalc_vdot():
     conn = _open_db()
@@ -576,13 +635,49 @@ def run_evals(request: EvalRunRequest):
 def post_coach_message(request: CoachMessageRequest):
     conn = _open_db()
     try:
+        thread = _resolve_coach_thread(conn, request.thread_id)
+        persisted_messages = store.get_coach_messages(conn, thread["id"])
+        if persisted_messages:
+            conversation = [
+                {"role": row["role"], "content": row["content"]}
+                for row in persisted_messages
+            ]
+        else:
+            conversation = [message.model_dump() for message in request.conversation]
+            for message in conversation:
+                store.append_coach_message(
+                    conn,
+                    thread["id"],
+                    message["role"],
+                    message["content"],
+                )
+                if message["role"] == "user":
+                    store.maybe_set_coach_thread_title_from_message(
+                        conn,
+                        thread["id"],
+                        message["content"],
+                    )
+
         session = coach.CoachSession(conn, model=request.model, max_tokens=request.max_tokens)
-        session.conversation = [message.model_dump() for message in request.conversation]
+        session.conversation = conversation
+        existing_count = len(session.conversation)
         raw_text = session.ask(request.message)
+        for message in session.conversation[existing_count:]:
+            store.append_coach_message(
+                conn,
+                thread["id"],
+                message["role"],
+                message["content"],
+            )
+        store.maybe_set_coach_thread_title_from_message(conn, thread["id"], request.message)
+        thread = store.get_coach_thread(conn, thread["id"])
+        if thread is None:
+            raise HTTPException(status_code=500, detail="Coach thread could not be reloaded.")
         verdict, evidence_lines, next_step = _parse_coach_sections(raw_text)
         evidence = [_evidence_item(conn, line) for line in evidence_lines]
         sources = sorted({match.strip() for match in _SOURCE_RE.findall(raw_text)})
         return {
+            "thread": _serialize_coach_thread(thread),
             "verdict": verdict,
             "evidence": evidence,
             "next_step": next_step,

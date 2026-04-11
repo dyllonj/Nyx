@@ -46,6 +46,12 @@ export const api = {
   getRuns: (limit = 10) => apiRequest<any>(`/api/runs?limit=${limit}`),
   getRun: (activityId: number | string) => apiRequest<any>(`/api/runs/${activityId}`),
   getCoachContext: () => apiRequest<any>("/api/coach/context"),
+  getCurrentCoachThread: () => apiRequest<any>("/api/coach/thread/current"),
+  createCoachThread: () =>
+    apiRequest<any>("/api/coach/thread", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   recalcMetrics: () =>
     apiRequest<any>("/api/vdot/recalc", {
       method: "POST",
@@ -69,7 +75,8 @@ export const api = {
     }),
   postCoachMessage: (payload: {
     message: string;
-    conversation: { role: string; content: string }[];
+    thread_id?: number;
+    conversation?: { role: string; content: string }[];
   }) =>
     apiRequest<any>("/api/coach/message", {
       method: "POST",

@@ -53,7 +53,27 @@ CREATE INDEX IF NOT EXISTS idx_runs_detail_fetched ON runs(detail_fetched, start
 CREATE INDEX IF NOT EXISTS idx_laps_activity_id ON laps(activity_id, lap_index);
 """
 
-SCHEMA_VERSION = 2
+COACH_SCHEMA = """
+CREATE TABLE IF NOT EXISTS coach_threads (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS coach_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id  INTEGER NOT NULL REFERENCES coach_threads(id) ON DELETE CASCADE,
+    role       TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_coach_threads_updated_at ON coach_threads(updated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_coach_messages_thread_id ON coach_messages(thread_id, id);
+"""
+
+SCHEMA_VERSION = 4
 
 
 def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
@@ -75,6 +95,17 @@ def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
     if current < 2:
         conn.executescript(INDEX_SCHEMA)
         conn.execute("PRAGMA user_version = 2")
+        current = 2
+
+    if current < 3:
+        _backfill_run_avg_hr_from_laps(conn)
+        _recompute_derived_metrics(conn)
+        conn.execute("PRAGMA user_version = 3")
+        current = 3
+
+    if current < 4:
+        conn.executescript(COACH_SCHEMA)
+        conn.execute("PRAGMA user_version = 4")
 
     conn.commit()
 
@@ -204,6 +235,132 @@ def set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     conn.commit()
 
 
+def _now_timestamp() -> str:
+    return datetime.datetime.now().isoformat(timespec="seconds")
+
+
+def _coach_thread_title_from_message(message: str, max_len: int = 72) -> str:
+    normalized = " ".join(message.split())
+    if len(normalized) <= max_len:
+        return normalized
+    return normalized[: max_len - 1].rstrip() + "..."
+
+
+def get_coach_thread(conn: sqlite3.Connection, thread_id: int) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM coach_threads WHERE id = ?",
+        (thread_id,),
+    ).fetchone()
+
+
+def get_coach_messages(conn: sqlite3.Connection, thread_id: int) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT id, thread_id, role, content, created_at
+        FROM coach_messages
+        WHERE thread_id = ?
+        ORDER BY id ASC
+        """,
+        (thread_id,),
+    ).fetchall()
+
+
+def set_active_coach_thread(conn: sqlite3.Connection, thread_id: int) -> None:
+    set_meta(conn, "active_coach_thread_id", str(thread_id))
+
+
+def get_active_coach_thread(conn: sqlite3.Connection) -> Optional[sqlite3.Row]:
+    raw_thread_id = get_meta(conn, "active_coach_thread_id")
+    if raw_thread_id:
+        try:
+            thread_id = int(raw_thread_id)
+        except ValueError:
+            thread_id = 0
+        if thread_id:
+            thread = get_coach_thread(conn, thread_id)
+            if thread is not None:
+                return thread
+
+    thread = conn.execute(
+        """
+        SELECT *
+        FROM coach_threads
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        """
+    ).fetchone()
+    if thread is not None:
+        set_active_coach_thread(conn, thread["id"])
+    return thread
+
+
+def create_coach_thread(conn: sqlite3.Connection, title: str = "") -> sqlite3.Row:
+    now = _now_timestamp()
+    cursor = conn.execute(
+        """
+        INSERT INTO coach_threads (title, created_at, updated_at)
+        VALUES (?, ?, ?)
+        """,
+        (title, now, now),
+    )
+    conn.commit()
+    thread = get_coach_thread(conn, cursor.lastrowid)
+    if thread is None:
+        raise RuntimeError("Failed to create coach thread.")
+    set_active_coach_thread(conn, thread["id"])
+    return thread
+
+
+def get_or_create_active_coach_thread(conn: sqlite3.Connection) -> sqlite3.Row:
+    thread = get_active_coach_thread(conn)
+    if thread is not None:
+        return thread
+    return create_coach_thread(conn)
+
+
+def append_coach_message(conn: sqlite3.Connection, thread_id: int, role: str, content: str) -> sqlite3.Row:
+    now = _now_timestamp()
+    cursor = conn.execute(
+        """
+        INSERT INTO coach_messages (thread_id, role, content, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (thread_id, role, content, now),
+    )
+    conn.execute(
+        "UPDATE coach_threads SET updated_at = ? WHERE id = ?",
+        (now, thread_id),
+    )
+    conn.commit()
+    message = conn.execute(
+        """
+        SELECT id, thread_id, role, content, created_at
+        FROM coach_messages
+        WHERE id = ?
+        """,
+        (cursor.lastrowid,),
+    ).fetchone()
+    if message is None:
+        raise RuntimeError("Failed to append coach message.")
+    return message
+
+
+def maybe_set_coach_thread_title_from_message(
+    conn: sqlite3.Connection,
+    thread_id: int,
+    user_message: str,
+) -> None:
+    conn.execute(
+        """
+        UPDATE coach_threads
+        SET title = COALESCE(NULLIF(title, ''), ?)
+        WHERE id = ?
+        """,
+        (_coach_thread_title_from_message(user_message), thread_id),
+    )
+    conn.commit()
+
+
 def get_sync_start_date(conn: sqlite3.Connection) -> str:
     watermark = get_meta(conn, "sync_watermark_date")
     if not watermark:
@@ -264,6 +421,7 @@ def compute_and_store_ae_baseline(conn: sqlite3.Connection) -> Optional[float]:
     ).fetchall()
 
     if not rows:
+        set_meta(conn, "ae_baseline", "")
         return None
 
     ae_values = [row["aerobic_efficiency"] for row in rows]
@@ -275,8 +433,8 @@ def compute_and_store_ae_baseline(conn: sqlite3.Connection) -> Optional[float]:
     return baseline
 
 
-def recompute_all_rei(conn: sqlite3.Connection, ae_baseline: float) -> int:
-    """Recompute REI for all runs using a fresh AE baseline. Returns count updated."""
+def recompute_all_rei(conn: sqlite3.Connection, ae_baseline: Optional[float]) -> int:
+    """Recompute REI for all runs using the latest AE baseline, if available."""
     from metrics import compute_rei
     import datetime
 
@@ -310,3 +468,55 @@ def recompute_all_rei(conn: sqlite3.Connection, ae_baseline: float) -> int:
         updated += 1
     conn.commit()
     return updated
+
+
+def _backfill_run_avg_hr_from_laps(conn: sqlite3.Connection) -> int:
+    cursor = conn.execute(
+        """
+        UPDATE runs
+        SET avg_hr = (
+            SELECT CASE
+                WHEN SUM(CASE WHEN laps.duration_sec IS NOT NULL AND laps.duration_sec > 0 THEN laps.duration_sec ELSE 0 END) > 0
+                    THEN SUM(laps.avg_hr * laps.duration_sec) / SUM(laps.duration_sec)
+                ELSE AVG(laps.avg_hr)
+            END
+            FROM laps
+            WHERE laps.activity_id = runs.activity_id
+              AND laps.avg_hr IS NOT NULL
+        )
+        WHERE runs.avg_hr IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM laps
+              WHERE laps.activity_id = runs.activity_id
+                AND laps.avg_hr IS NOT NULL
+          )
+        """
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
+def _recompute_derived_metrics(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        UPDATE runs
+        SET aerobic_efficiency = CASE
+            WHEN avg_hr IS NOT NULL AND avg_hr > 0 AND pace_min_per_km IS NOT NULL
+                THEN pace_min_per_km / avg_hr
+            ELSE NULL
+        END
+        """
+    )
+    conn.commit()
+
+    ae_baseline = compute_and_store_ae_baseline(conn)
+    recompute_all_rei(conn, ae_baseline)
+
+    import vdot_zones
+
+    vdot_zones.estimate_vdot_from_runs(conn)
+    try:
+        vdot_zones._refresh_hr_zones(conn)
+    except ValueError:
+        pass

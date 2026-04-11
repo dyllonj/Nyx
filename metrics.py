@@ -28,6 +28,10 @@ def _safe_stdev(samples: list[float]) -> Optional[float]:
 
 def apply_detail_metrics(run: RunSummary, parsed: dict) -> None:
     """Write averaged detail metrics back onto a RunSummary in-place."""
+    avg_hr = _safe_mean(parsed["hr_samples"])
+    if avg_hr and avg_hr > 0:
+        run.avg_hr = avg_hr
+
     run.avg_cadence_spm = _safe_mean(parsed["cadence_samples"])
     run.avg_vertical_osc_cm = _safe_mean(parsed["oscillation_samples"])
     run.avg_ground_contact_ms = _safe_mean(parsed["gct_samples"])
@@ -43,6 +47,17 @@ def apply_detail_metrics(run: RunSummary, parsed: dict) -> None:
 def apply_split_metrics(run: RunSummary, splits: dict) -> None:
     """Compute HR drift from lap data."""
     laps = splits.get("lapDTOs", [])
+    if run.avg_hr is None:
+        hr_laps = [lap for lap in laps if lap.get("averageHR")]
+        if hr_laps:
+            weighted_duration = sum((lap.get("duration") or 0) for lap in hr_laps)
+            if weighted_duration > 0:
+                run.avg_hr = sum(
+                    lap["averageHR"] * (lap.get("duration") or 0) for lap in hr_laps
+                ) / weighted_duration
+            else:
+                run.avg_hr = statistics.mean(lap["averageHR"] for lap in hr_laps)
+
     if len(laps) < 3:
         return
 

@@ -233,7 +233,7 @@ const styles = {
     paddingHorizontal: theme.spacing.xl,
     paddingTop: theme.spacing.xl,
     paddingBottom: 120,
-    width: "100%",
+    width: "100%" as const,
   },
   bottomBar: {
     backgroundColor: theme.colors.surface1,
