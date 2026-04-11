@@ -100,7 +100,7 @@ python3 coach.py
 - Python 3.11+
 - Node.js 18+ (for the web client)
 - A Garmin Connect account for sync
-- An Anthropic API key for coach chat and live evals
+- A Moonshot API key for coach chat and live evals (get one at platform.moonshot.ai)
 
 ## Setup
 
@@ -122,10 +122,10 @@ python3 scripts/create-garmin-token.py
 
 Tokens are saved to `~/.garminconnect/garmin_tokens.json` by default. To use a custom location, pass `--tokenstore <path>` and set `GARMINTOKENS=<path>` in your environment.
 
-3. Set your Anthropic API key.
+3. Set your Moonshot API key.
 
 ```bash
-export ANTHROPIC_API_KEY=your_key_here
+export MOONSHOT_API_KEY=your_key_here
 ```
 
 4. Build the local knowledge base.
@@ -228,7 +228,7 @@ Nyx ships with a patched version of `python-garminconnect` that adds a widget-ba
 ### Coach or live evals need an API key
 
 ```bash
-export ANTHROPIC_API_KEY=your_key_here
+export MOONSHOT_API_KEY=your_key_here
 ```
 
 ### Knowledge base missing
