@@ -6,6 +6,8 @@ It pulls Garmin run history into a local SQLite database, computes training metr
 
 This is a developer harness, not the final user-facing product UI.
 
+The planned web/mobile product direction is documented in [docs/web-app-build-spec.md](docs/web-app-build-spec.md).
+
 If you want the friendly launcher instead of the raw CLI, start with:
 
 ```bash
