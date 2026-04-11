@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Surface } from "@/components/Surface";
 import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
+import { convertPaceStr, fmtMi, fmtPaceMi } from "@/lib/units";
 
 export default function AthleteScreen() {
   const summaryQuery = useQuery({
@@ -65,7 +66,7 @@ export default function AthleteScreen() {
         <Surface>
           <Text style={styles.label}>42-day load</Text>
           <Text style={styles.bigValue}>
-            {athlete ? `${athlete.recent_42d_runs} runs / ${athlete.recent_42d_distance_km} km` : "Loading"}
+            {athlete ? `${athlete.recent_42d_runs} runs / ${fmtMi(athlete.recent_42d_distance_km)}` : "Loading"}
           </Text>
         </Surface>
         <Surface>
@@ -88,10 +89,10 @@ export default function AthleteScreen() {
           subtitle="Daniels-derived paces stay front and center because they answer the most common coaching questions fast."
         />
         <View style={styles.metricStack}>
-          <MetricRow label="Easy" value={athlete?.vdot?.easy_pace ? `${athlete.vdot.easy_pace}/km` : "n/a"} />
-          <MetricRow label="Marathon" value={athlete?.vdot?.marathon_pace ? `${athlete.vdot.marathon_pace}/km` : "n/a"} />
-          <MetricRow label="Threshold" value={athlete?.vdot?.threshold_pace ? `${athlete.vdot.threshold_pace}/km` : "n/a"} />
-          <MetricRow label="Interval" value={athlete?.vdot?.interval_pace ? `${athlete.vdot.interval_pace}/km` : "n/a"} />
+          <MetricRow label="Easy" value={athlete?.vdot?.easy_pace ? `${convertPaceStr(athlete.vdot.easy_pace)}/mi` : "n/a"} />
+          <MetricRow label="Marathon" value={athlete?.vdot?.marathon_pace ? `${convertPaceStr(athlete.vdot.marathon_pace)}/mi` : "n/a"} />
+          <MetricRow label="Threshold" value={athlete?.vdot?.threshold_pace ? `${convertPaceStr(athlete.vdot.threshold_pace)}/mi` : "n/a"} />
+          <MetricRow label="Interval" value={athlete?.vdot?.interval_pace ? `${convertPaceStr(athlete.vdot.interval_pace)}/mi` : "n/a"} />
         </View>
       </Surface>
 
@@ -123,9 +124,9 @@ export default function AthleteScreen() {
           {runs.map((run: any) => (
             <View key={run.activity_id} style={styles.runCard}>
               <Text style={styles.runDate}>{run.start_time.slice(0, 10)}</Text>
-              <Text style={styles.runTitle}>{run.distance_km.toFixed(1)} km</Text>
+              <Text style={styles.runTitle}>{fmtMi(run.distance_km)}</Text>
               <Text style={styles.subtle}>
-                {run.pace_min_per_km ? `${run.pace_min_per_km.toFixed(2)} min/km` : "n/a"} ·{" "}
+                {run.pace_min_per_km ? fmtPaceMi(run.pace_min_per_km) : "n/a"} ·{" "}
                 {run.avg_hr ? `${Math.round(run.avg_hr)} bpm` : "n/a"} ·{" "}
                 {run.rei ? `REI ${run.rei.toFixed(0)}` : "REI n/a"}
               </Text>

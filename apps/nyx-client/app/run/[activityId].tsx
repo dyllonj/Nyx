@@ -7,6 +7,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { Surface } from "@/components/Surface";
 import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
+import { fmtMi, fmtPaceMi } from "@/lib/units";
 
 export default function RunDetailScreen() {
   const { activityId } = useLocalSearchParams<{ activityId: string }>();
@@ -32,8 +33,8 @@ export default function RunDetailScreen() {
         />
         {run ? (
           <View style={styles.metrics}>
-            <MetricLine label="Distance" value={`${run.distance_km.toFixed(1)} km`} />
-            <MetricLine label="Pace" value={run.pace_min_per_km ? `${run.pace_min_per_km.toFixed(2)} min/km` : "n/a"} />
+            <MetricLine label="Distance" value={fmtMi(run.distance_km)} />
+            <MetricLine label="Pace" value={run.pace_min_per_km ? fmtPaceMi(run.pace_min_per_km) : "n/a"} />
             <MetricLine label="Average HR" value={run.avg_hr ? `${Math.round(run.avg_hr)} bpm` : "n/a"} />
             <MetricLine label="REI" value={run.rei ? run.rei.toFixed(1) : "n/a"} />
             <MetricLine label="HR drift" value={run.hr_drift_pct ? `${run.hr_drift_pct.toFixed(1)}%` : "n/a"} />
@@ -53,7 +54,7 @@ export default function RunDetailScreen() {
             <View key={lap.lap_index} style={styles.lapRow}>
               <Text style={styles.lapTitle}>Lap {lap.lap_index + 1}</Text>
               <Text style={styles.lapText}>
-                {lap.distance_m ? `${(lap.distance_m / 1000).toFixed(2)} km` : "n/a"} ·{" "}
+                {lap.distance_m ? fmtMi(lap.distance_m / 1000, 2) : "n/a"} ·{" "}
                 {lap.avg_hr ? `${Math.round(lap.avg_hr)} bpm` : "n/a"} ·{" "}
                 {lap.avg_cadence_spm ? `${Math.round(lap.avg_cadence_spm)} spm` : "n/a"}
               </Text>

@@ -16,6 +16,7 @@ import { SignalRow } from "@/components/SignalRow";
 import { Surface } from "@/components/Surface";
 import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
+import { convertPaceStr, fmtMi, fmtPaceMi } from "@/lib/units";
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -127,7 +128,7 @@ export default function HomeScreen() {
         </View>
         <Text style={styles.heroLead}>
           {athlete?.vdot?.easy_pace
-            ? `Easy pace ${athlete.vdot.easy_pace}/km`
+            ? `Easy pace ${convertPaceStr(athlete.vdot.easy_pace)}/mi`
             : "Sync data and refresh metrics to unlock current training paces."}
         </Text>
         <Text style={styles.cacheMeta}>
@@ -179,7 +180,7 @@ export default function HomeScreen() {
         <Surface>
           <Text style={styles.kicker}>Current state</Text>
           <Text style={styles.statValue}>
-            {athlete ? `${athlete.recent_42d_runs} runs / ${athlete.recent_42d_distance_km} km` : "Loading"}
+            {athlete ? `${athlete.recent_42d_runs} runs / ${fmtMi(athlete.recent_42d_distance_km)}` : "Loading"}
           </Text>
           <Text style={styles.statHint}>Recent 42-day load</Text>
           <View style={styles.rule} />
@@ -191,7 +192,7 @@ export default function HomeScreen() {
 
         <Surface>
           <Text style={styles.kicker}>Current fitness</Text>
-          <Text style={styles.statValue}>{athlete?.vdot?.threshold_pace ? `${athlete.vdot.threshold_pace}/km` : "n/a"}</Text>
+          <Text style={styles.statValue}>{athlete?.vdot?.threshold_pace ? `${convertPaceStr(athlete.vdot.threshold_pace)}/mi` : "n/a"}</Text>
           <Text style={styles.statHint}>Threshold pace</Text>
           <View style={styles.rule} />
           <Text style={styles.statValue}>
@@ -215,8 +216,8 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.runRow, pressed && styles.runRowPressed]}
             >
               <Text style={styles.runDate}>{run.start_time.slice(0, 10)}</Text>
-              <Text style={styles.runMain}>{run.distance_km.toFixed(1)} km</Text>
-              <Text style={styles.runMetric}>{run.pace_min_per_km ? `${run.pace_min_per_km.toFixed(2)} min/km` : "n/a"}</Text>
+              <Text style={styles.runMain}>{fmtMi(run.distance_km)}</Text>
+              <Text style={styles.runMetric}>{run.pace_min_per_km ? fmtPaceMi(run.pace_min_per_km) : "n/a"}</Text>
               <Text style={styles.runMetric}>{run.avg_hr ? `${Math.round(run.avg_hr)} bpm` : "n/a"}</Text>
               <Text style={styles.runMetric}>{run.rei ? `REI ${run.rei.toFixed(0)}` : "REI n/a"}</Text>
             </Pressable>

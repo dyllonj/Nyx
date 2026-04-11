@@ -18,6 +18,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Surface } from "@/components/Surface";
 import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
+import { convertPaceStr } from "@/lib/units";
 
 type EvidenceItem = {
   label: string;
@@ -266,7 +267,7 @@ export default function CoachScreen() {
       <Surface>
         <View style={styles.contextStrip}>
           <MetricPill label="vdot" value={context?.current_vdot ? String(context.current_vdot) : "n/a"} />
-          <MetricPill label="easy" value={context?.easy_pace ? `${context.easy_pace}/km` : "n/a"} />
+          <MetricPill label="easy" value={context?.easy_pace ? `${convertPaceStr(context.easy_pace)}/mi` : "n/a"} />
           <MetricPill
             label="z2"
             value={context?.zone_2 ? `${context.zone_2.hr_low}-${context.zone_2.hr_high} bpm` : "n/a"}
