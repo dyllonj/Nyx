@@ -32,6 +32,11 @@ export default function AthleteScreen() {
           title={athlete?.goal_preview?.text ?? "Progress without a clear goal"}
           subtitle="This is the factual read on whether current training signals are moving in a useful direction."
         />
+        <Text style={styles.subtle}>
+          {athlete?.meta?.last_sync
+            ? `Local cache • last sync ${athlete.meta.last_sync}`
+            : "Local cache • no successful sync yet"}
+        </Text>
         <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Overall</Text>
           <StatusBadge status={athlete?.coach_status?.progress?.status ?? "unknown"} />

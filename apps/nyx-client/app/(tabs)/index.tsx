@@ -116,6 +116,7 @@ export default function HomeScreen() {
         />
         <View style={styles.heroMetrics}>
           <MetricPill label="sync" value={athlete?.last_sync_status ?? "unknown"} />
+          <MetricPill label="data" value={athlete?.meta?.cached ? "local cache" : "live"} />
           <MetricPill label="vdot" value={athlete?.vdot?.value ? String(athlete.vdot.value) : "not set"} />
           <MetricPill
             label="z2"
@@ -128,6 +129,11 @@ export default function HomeScreen() {
           {athlete?.vdot?.easy_pace
             ? `Easy pace ${athlete.vdot.easy_pace}/km`
             : "Sync data and refresh metrics to unlock current training paces."}
+        </Text>
+        <Text style={styles.cacheMeta}>
+          {athlete?.meta?.last_sync
+            ? `Using cached local data • last sync ${athlete.meta.last_sync}`
+            : "Using cached local data • no successful sync yet"}
         </Text>
         {syncJob?.status === "running" || syncJob?.status === "queued" ? (
           <View style={styles.inlineStatus}>
@@ -246,6 +252,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginTop: theme.spacing.lg,
+  },
+  cacheMeta: {
+    color: theme.colors.textSecondary,
+    fontFamily: theme.fonts.body,
+    fontSize: 14,
+    marginTop: theme.spacing.md,
   },
   inlineStatusText: {
     color: theme.colors.textSecondary,

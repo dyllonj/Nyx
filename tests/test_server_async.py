@@ -30,6 +30,8 @@ class ServerAsyncTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(payload["schema_version"], store.SCHEMA_VERSION)
         self.assertEqual(payload["last_sync_status"], "never")
+        self.assertEqual(payload["meta"]["source"], "local_db")
+        self.assertTrue(payload["meta"]["cached"])
 
 
 if __name__ == "__main__":

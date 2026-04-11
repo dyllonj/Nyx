@@ -263,6 +263,27 @@ def _current_vdot_payload(conn) -> dict | None:
     }
 
 
+def _local_data_meta(conn) -> dict:
+    last_sync_completed_at = store.get_meta(conn, "last_sync_completed_at")
+    last_sync_status = store.get_meta(conn, "last_sync_status") or "never"
+    stale = True
+
+    if last_sync_completed_at:
+        try:
+            completed_at = datetime.datetime.fromisoformat(last_sync_completed_at)
+            stale = (datetime.datetime.now() - completed_at).days > 7
+        except ValueError:
+            stale = True
+
+    return {
+        "cached": True,
+        "source": "local_db",
+        "last_sync": last_sync_completed_at,
+        "sync_status": last_sync_status,
+        "stale": stale,
+    }
+
+
 def _recent_load(runs, days: int = 42) -> tuple[int, float]:
     cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
     selected = []
@@ -971,7 +992,12 @@ def api_root():
 
 @app.get("/api/status")
 async def get_status():
-    return await _run_db_async(health.collect_status)
+    def load(conn: sqlite3.Connection) -> dict:
+        payload = health.collect_status(conn)
+        payload["meta"] = _local_data_meta(conn)
+        return payload
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/doctor")
@@ -995,14 +1021,22 @@ async def get_deep_health():
 
 @app.get("/api/athlete/summary")
 async def get_athlete_summary():
-    return await _run_db_async(_athlete_summary)
+    def load(conn: sqlite3.Connection) -> dict:
+        payload = _athlete_summary(conn)
+        payload["meta"] = _local_data_meta(conn)
+        return payload
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/runs")
 async def get_runs(limit: int = 50):
     def load(conn: sqlite3.Connection) -> dict:
         runs = store.get_all_runs(conn, limit=limit)
-        return {"runs": [_serialize_run(row) for row in runs]}
+        return {
+            "runs": [_serialize_run(row) for row in runs],
+            "meta": _local_data_meta(conn),
+        }
 
     return await _run_db_async(load)
 
@@ -1035,6 +1069,7 @@ async def get_run_detail(activity_id: int):
                 }
                 for lap in laps
             ],
+            "meta": _local_data_meta(conn),
         }
 
     return await _run_db_async(load)
@@ -1043,7 +1078,10 @@ async def get_run_detail(activity_id: int):
 @app.get("/api/vdot")
 async def get_vdot():
     def load(conn: sqlite3.Connection) -> dict:
-        return {"vdot": _current_vdot_payload(conn)}
+        return {
+            "vdot": _current_vdot_payload(conn),
+            "meta": _local_data_meta(conn),
+        }
 
     return await _run_db_async(load)
 
@@ -1051,14 +1089,22 @@ async def get_vdot():
 @app.get("/api/hr-zones")
 async def get_hr_zones():
     def load(conn: sqlite3.Connection) -> dict:
-        return {"hr_zones": _parse_hr_zones(conn)}
+        return {
+            "hr_zones": _parse_hr_zones(conn),
+            "meta": _local_data_meta(conn),
+        }
 
     return await _run_db_async(load)
 
 
 @app.get("/api/coach/context")
 async def get_coach_context():
-    return await _run_db_async(_coach_context_summary)
+    def load(conn: sqlite3.Connection) -> dict:
+        payload = _coach_context_summary(conn)
+        payload["meta"] = _local_data_meta(conn)
+        return payload
+
+    return await _run_db_async(load)
 
 
 @app.get("/api/coach/thread/current")
