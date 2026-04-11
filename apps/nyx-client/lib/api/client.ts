@@ -80,6 +80,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ live: true }),
     }),
+  generateTrainingPlan: (payload: {
+    goal: string;
+    weeks?: number;
+    days_per_week?: number;
+    current_vdot?: number;
+  }) =>
+    apiRequest<any>("/api/training-plan", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   postCoachFeedback: (payload: {
     thread_id: number;
     message_id: number;

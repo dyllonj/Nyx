@@ -26,6 +26,7 @@ import models
 import onboarding
 import store
 import sync_engine
+import training_plans
 import vdot_zones
 from errors import HarnessError, format_error
 
@@ -339,6 +340,35 @@ def cmd_backup(args):
     print(f"Backed up local DB to {output_path}")
 
 
+def cmd_plan(args):
+    conn = store.open_db()
+    try:
+        plan = training_plans.build_plan_from_db(
+            conn,
+            goal=args.goal,
+            weeks=args.weeks,
+            days_per_week=args.days_per_week,
+            current_vdot=args.vdot,
+        )
+    finally:
+        conn.close()
+
+    print(f"Goal: {plan.goal}")
+    print(f"Weeks: {plan.weeks}  Days/week: {plan.days_per_week}")
+    print(f"Recent 42d load: {plan.recent_42d_distance_km:.1f} km")
+    print(f"Current VDOT: {plan.current_vdot:.1f}" if plan.current_vdot is not None else "Current VDOT: n/a")
+    print()
+    for week in plan.weeks_detail:
+        print(f"Week {week.week} [{week.phase}] — target {week.target_distance_km:.1f} km")
+        print(f"  Focus: {week.focus}")
+        for workout in week.workouts:
+            print(f"  {workout.day} · {workout.title}: {workout.description}")
+        print()
+    print("Notes:")
+    for note in plan.notes:
+        print(f"- {note}")
+
+
 def cmd_eval(args):
     conn = store.open_db()
     offline_results = evals.run_offline_evals(conn)
@@ -413,6 +443,12 @@ def main():
     ob.add_argument("--reset", action="store_true", help="Clear existing answers and start over")
     ob.add_argument("--full", action="store_true", help="Run full question set (default: MVP 5 questions)")
 
+    plan = sub.add_parser("plan", help="Generate a structured training plan from current local data")
+    plan.add_argument("--goal", required=True, help="Goal race or focus, e.g. 'half marathon' or '5k'")
+    plan.add_argument("--weeks", type=int, default=8, help="Plan length in weeks (default 8)")
+    plan.add_argument("--days-per-week", type=int, default=4, help="Planned run days per week (default 4)")
+    plan.add_argument("--vdot", type=float, help="Override current VDOT")
+
     args = parser.parse_args()
 
     if args.command == "sync":
@@ -437,6 +473,8 @@ def main():
         cmd_eval(args)
     elif args.command == "onboarding":
         cmd_onboarding(args)
+    elif args.command == "plan":
+        cmd_plan(args)
     else:
         parser.print_help()
 

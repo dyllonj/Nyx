@@ -26,6 +26,7 @@ import health
 from logging_utils import get_logger, log_event
 import store
 import sync_engine
+import training_plans
 import vdot_zones
 from errors import HarnessError
 
@@ -99,6 +100,13 @@ class SyncStartRequest(BaseModel):
     email: str | None = None
     password: str | None = None
     interactive: bool = False
+
+
+class TrainingPlanRequest(BaseModel):
+    goal: str = Field(min_length=1)
+    weeks: int = Field(default=8, ge=2, le=20)
+    days_per_week: int = Field(default=4, ge=3, le=6)
+    current_vdot: float | None = None
 
 
 def _configured_cors_origins() -> list[str]:
@@ -1172,6 +1180,24 @@ async def run_evals(request: EvalRunRequest):
         return response
 
     return await _run_db_async(execute)
+
+
+@app.post("/api/training-plan")
+async def create_training_plan(request: TrainingPlanRequest):
+    def build(conn: sqlite3.Connection) -> dict:
+        plan = training_plans.build_plan_from_db(
+            conn,
+            goal=request.goal,
+            weeks=request.weeks,
+            days_per_week=request.days_per_week,
+            current_vdot=request.current_vdot,
+        )
+        return {
+            "plan": plan.model_dump(),
+            "meta": _local_data_meta(conn),
+        }
+
+    return await _run_db_async(build)
 
 
 @app.post("/api/coach/feedback")

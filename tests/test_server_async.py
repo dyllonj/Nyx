@@ -33,6 +33,21 @@ class ServerAsyncTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["meta"]["source"], "local_db")
         self.assertTrue(payload["meta"]["cached"])
 
+    async def test_training_plan_endpoint_uses_local_data(self) -> None:
+        conn = store.open_db()
+        try:
+            store.set_meta(conn, "current_vdot", "50.0")
+        finally:
+            conn.close()
+
+        payload = await server.create_training_plan(
+            server.TrainingPlanRequest(goal="10k", weeks=4, days_per_week=4)
+        )
+
+        self.assertEqual(payload["plan"]["goal"], "10k")
+        self.assertEqual(len(payload["plan"]["weeks_detail"]), 4)
+        self.assertEqual(payload["meta"]["source"], "local_db")
+
 
 if __name__ == "__main__":
     unittest.main()

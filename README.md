@@ -43,6 +43,7 @@ The FastAPI server (`server.py`) exposes:
 | `/api/sync` | POST | Start background sync job |
 | `/api/sync/{job_id}` | GET | Poll sync job progress |
 | `/api/vdot/recalc` | POST | Force VDOT and HR zone refresh |
+| `/api/training-plan` | POST | Generate a structured training plan from local data |
 | `/api/coach/message` | POST | Send message to coach, get structured response |
 | `/api/evals/run` | POST | Run offline or live evals |
 
@@ -196,6 +197,7 @@ If `NYX_API_TOKEN` is set, Nyx requires `Authorization: Bearer <token>` on `/api
 | `python3 cli.py export --format json` | Export local run data to JSON |
 | `python3 cli.py export --format csv --since 2026-04-01` | Export recent run summaries to CSV |
 | `python3 cli.py backup` | Snapshot the local SQLite database |
+| `python3 cli.py plan --goal "half marathon" --weeks 8` | Generate a structured week-by-week training plan |
 | `python3 cli.py status` | Show harness state |
 | `python3 cli.py doctor` | Check environment readiness |
 | `python3 cli.py report --n 20` | Print recent runs |
