@@ -4,3 +4,5 @@ anthropic>=0.40.0
 fastembed>=0.3.0
 chromadb>=0.5.0
 textual>=3.7.0
+fastapi>=0.116.0
+uvicorn>=0.35.0
