@@ -1,0 +1,18 @@
+[Unit]
+Description=Nyx local API and web app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Work/Nyx
+Environment=PYTHONUNBUFFERED=1
+Environment=NYX_HOST=127.0.0.1
+Environment=NYX_PORT=8765
+EnvironmentFile=-%h/.config/nyx/nyx.env
+ExecStart=%h/Work/Nyx/scripts/run-nyx-dual.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

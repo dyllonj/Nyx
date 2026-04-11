@@ -1,4 +1,22 @@
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+const DEFAULT_API_PORT = "8765";
+
+function resolveApiBaseUrl(): string {
+  if (process.env.EXPO_PUBLIC_API_BASE_URL) {
+    return process.env.EXPO_PUBLIC_API_BASE_URL;
+  }
+
+  if (typeof window !== "undefined") {
+    if (process.env.NODE_ENV === "development") {
+      return `${window.location.protocol}//${window.location.hostname}:${DEFAULT_API_PORT}`;
+    }
+
+    return window.location.origin;
+  }
+
+  return `http://127.0.0.1:${DEFAULT_API_PORT}`;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {

@@ -6,10 +6,11 @@ import statistics
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 import coach
@@ -23,6 +24,8 @@ from errors import HarnessError
 
 _DATE_RE = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
 _SOURCE_RE = re.compile(r"\[Source:\s*([^\]]+)\]")
+_ROOT_DIR = Path(__file__).resolve().parent
+_WEB_DIST_DIR = _ROOT_DIR / "apps" / "nyx-client" / "dist"
 
 
 class ConversationMessage(BaseModel):
@@ -98,6 +101,30 @@ async def handle_harness_error(_, exc: HarnessError):
 
 def _open_db():
     return store.open_db()
+
+
+def _resolve_web_response_path(request_path: str) -> Path | None:
+    if not _WEB_DIST_DIR.is_dir():
+        return None
+
+    relative_path = request_path.lstrip("/")
+    index_file = _WEB_DIST_DIR / "index.html"
+    if not relative_path:
+        return index_file if index_file.is_file() else None
+
+    candidate = (_WEB_DIST_DIR / relative_path).resolve()
+    try:
+        candidate.relative_to(_WEB_DIST_DIR.resolve())
+    except ValueError:
+        return None
+
+    if candidate.is_file():
+        return candidate
+
+    if Path(relative_path).suffix:
+        return None
+
+    return index_file if index_file.is_file() else None
 
 
 def _parse_hr_zones(conn) -> dict | None:
@@ -585,3 +612,22 @@ def start_sync(request: SyncStartRequest):
 @app.get("/api/sync/{job_id}")
 def get_sync_job(job_id: str):
     return _sync_job_payload(_get_sync_job(job_id))
+
+
+@app.get("/", include_in_schema=False)
+def serve_web_root():
+    asset_path = _resolve_web_response_path("")
+    if not asset_path:
+        raise HTTPException(status_code=404, detail="Web app is not built yet.")
+    return FileResponse(asset_path)
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_web_app(full_path: str):
+    if full_path.startswith("api/") or full_path == "api":
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    asset_path = _resolve_web_response_path(full_path)
+    if not asset_path:
+        raise HTTPException(status_code=404, detail="Web app asset not found.")
+    return FileResponse(asset_path)

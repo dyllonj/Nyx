@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Nyx
+Comment=Start Nyx in the background for local and Tailscale access
+Exec=/home/deck/Work/Nyx/scripts/start-nyx-background.sh
+Terminal=false
+X-GNOME-Autostart-enabled=true
