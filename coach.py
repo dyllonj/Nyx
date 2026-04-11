@@ -24,6 +24,7 @@ import config
 import knowledge_base
 from logging_utils import get_logger, log_event
 import onboarding
+from resilience import CircuitBreaker, CircuitBreakerOpenError
 import store
 import vdot_zones
 from errors import DependencyError, HarnessError, format_error
@@ -252,6 +253,11 @@ def build_turn_system_blocks(
 
 _MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 logger = get_logger("coach")
+coach_circuit_breaker = CircuitBreaker(
+    "moonshot_api",
+    failure_threshold=config.COACH_CIRCUIT_BREAKER_FAILURES,
+    recovery_timeout_sec=config.COACH_CIRCUIT_BREAKER_TIMEOUT_SEC,
+)
 
 
 def _flatten_system(blocks: list[dict]) -> str:
@@ -317,11 +323,27 @@ class CoachSession:
             user_chars=len(user_input),
         )
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                messages=messages,
+            response = coach_circuit_breaker.call(
+                lambda: self.client.chat.completions.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    messages=messages,
+                )
             )
+        except CircuitBreakerOpenError as exc:
+            log_event(
+                logger,
+                logging.WARNING,
+                "coach.circuit_open",
+                model=self.model,
+                retry_after_sec=round(exc.retry_after_sec, 1),
+            )
+            raise HarnessError(
+                "moonshot_temporarily_unavailable",
+                "Coach requests are temporarily paused after repeated upstream failures.",
+                hint=f"Wait about {int(round(exc.retry_after_sec))} seconds, then retry your message.",
+                details=str(exc),
+            ) from exc
         except Exception as exc:
             log_event(
                 logger,

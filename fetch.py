@@ -4,14 +4,23 @@ import time
 import config
 from errors import DependencyError, HarnessError
 from logging_utils import get_logger, log_event
+from resilience import CircuitBreaker, CircuitBreakerOpenError
 
 
 logger = get_logger("fetch")
+garmin_circuit_breaker = CircuitBreaker(
+    "garmin_api",
+    failure_threshold=config.GARMIN_CIRCUIT_BREAKER_FAILURES,
+    recovery_timeout_sec=config.GARMIN_CIRCUIT_BREAKER_TIMEOUT_SEC,
+)
 
 
-def _rate_limit_error_type():
+def _garmin_error_types():
     try:
-        from garminconnect import GarminConnectTooManyRequestsError
+        from garminconnect import (
+            GarminConnectConnectionError,
+            GarminConnectTooManyRequestsError,
+        )
     except ImportError as e:
         raise DependencyError(
             "missing_garmin_dependency",
@@ -19,31 +28,48 @@ def _rate_limit_error_type():
             hint="Run `pip install -r requirements.txt` to enable Garmin sync.",
             details=str(e),
         ) from e
-    return GarminConnectTooManyRequestsError
+    return GarminConnectTooManyRequestsError, GarminConnectConnectionError
 
 
-def _retry_garmin_call(label: str, fn, *, attempts: int = 3):
-    rate_limit_error = _rate_limit_error_type()
-    delays = [15, 30, 60]
+def _retry_delay_sec(attempt: int) -> int:
+    return min(
+        config.GARMIN_RETRY_BASE_DELAY_SEC * (2 ** attempt),
+        config.GARMIN_RETRY_MAX_DELAY_SEC,
+    )
+
+
+def _retry_garmin_call(label: str, fn, *, attempts: int | None = None):
+    rate_limit_error, connection_error = _garmin_error_types()
+    attempts = attempts or config.GARMIN_RETRY_ATTEMPTS
     for attempt in range(attempts):
         try:
             return fn()
-        except rate_limit_error as e:
+        except (rate_limit_error, connection_error) as e:
             if attempt == attempts - 1:
+                is_rate_limited = isinstance(e, rate_limit_error)
                 raise HarnessError(
-                    "garmin_rate_limited",
-                    f"Garmin rate-limited the `{label}` request too many times.",
-                    hint="Wait a few minutes, then retry `python cli.py sync`.",
+                    "garmin_rate_limited" if is_rate_limited else "garmin_fetch_failed",
+                    (
+                        f"Garmin rate-limited the `{label}` request too many times."
+                        if is_rate_limited
+                        else f"Garmin connectivity failed repeatedly during `{label}`."
+                    ),
+                    hint=(
+                        "Wait a few minutes, then retry `python cli.py sync`."
+                        if is_rate_limited
+                        else "Retry the sync shortly. If this persists, inspect Garmin connectivity and token health."
+                    ),
                     details=str(e),
                 ) from e
-            delay = delays[min(attempt, len(delays) - 1)]
+            delay = _retry_delay_sec(attempt)
             log_event(
                 logger,
                 logging.WARNING,
-                "garmin.rate_limited",
+                "garmin.retry_scheduled",
                 label=label,
                 attempt=attempt + 1,
                 retry_in_sec=delay,
+                error_type=type(e).__name__,
             )
             time.sleep(delay)
         except Exception as e:
@@ -63,10 +89,29 @@ def _retry_garmin_call(label: str, fn, *, attempts: int = 3):
             ) from e
 
 
+def _call_garmin_api(label: str, fn):
+    try:
+        return garmin_circuit_breaker.call(lambda: _retry_garmin_call(label, fn))
+    except CircuitBreakerOpenError as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "garmin.circuit_open",
+            label=label,
+            retry_after_sec=round(exc.retry_after_sec, 1),
+        )
+        raise HarnessError(
+            "garmin_temporarily_unavailable",
+            "Garmin requests are temporarily paused after repeated failures.",
+            hint=f"Wait about {int(round(exc.retry_after_sec))} seconds, then retry sync.",
+            details=str(exc),
+        ) from exc
+
+
 def fetch_running_activities(client, start_date: str) -> list[dict]:
     """Fetch running activities from a watermark date onward."""
     log_event(logger, logging.INFO, "garmin.activities.fetch_started", start_date=start_date)
-    activities = _retry_garmin_call(
+    activities = _call_garmin_api(
         "activity list",
         lambda: client.get_activities_by_date(
             startdate=start_date,
@@ -81,7 +126,7 @@ def fetch_activity_detail(client, activity_id: int) -> dict:
     """Fetch per-sample time-series data for one activity."""
     log_event(logger, logging.DEBUG, "garmin.activity_detail.fetch_started", activity_id=activity_id)
     time.sleep(config.DETAIL_FETCH_DELAY_SEC)
-    return _retry_garmin_call(
+    return _call_garmin_api(
         f"activity detail {activity_id}",
         lambda: client.get_activity_details(str(activity_id), maxchart=2000),
     )
@@ -91,7 +136,7 @@ def fetch_activity_splits(client, activity_id: int) -> dict:
     """Fetch lap-level split data for one activity."""
     log_event(logger, logging.DEBUG, "garmin.activity_splits.fetch_started", activity_id=activity_id)
     time.sleep(config.DETAIL_FETCH_DELAY_SEC)
-    return _retry_garmin_call(
+    return _call_garmin_api(
         f"activity splits {activity_id}",
         lambda: client.get_activity_splits(str(activity_id)),
     )
