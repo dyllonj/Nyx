@@ -270,7 +270,7 @@ def build_turn_system_blocks(
     ]
 
 
-_MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
+_MOONSHOT_BASE_URL = "https://api.moonshot.ai/v1"
 logger = get_logger("coach")
 coach_circuit_breaker = CircuitBreaker(
     "moonshot_api",
@@ -317,7 +317,7 @@ class CoachSession:
         self,
         conn: sqlite3.Connection,
         *,
-        model: str = "kimi-2.5",
+        model: str = "kimi-k2.5",
         max_tokens: int = 1200,
     ) -> None:
         self.client = _make_openai_client()
