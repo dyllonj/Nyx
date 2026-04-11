@@ -1,4 +1,4 @@
-const DEFAULT_API_PORT = "8765";
+const DEFAULT_API_PORT = "8000";
 
 function resolveApiToken(): string | null {
   const token = process.env.EXPO_PUBLIC_API_TOKEN?.trim();
