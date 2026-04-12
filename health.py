@@ -208,6 +208,8 @@ def collect_status(conn: sqlite3.Connection) -> dict:
     total_runs = _count(conn, "SELECT COUNT(*) FROM runs")
     detailed_runs = _count(conn, "SELECT COUNT(*) FROM runs WHERE detail_fetched = 1")
     pending_details = _count(conn, "SELECT COUNT(*) FROM runs WHERE detail_fetched = 0")
+    total_provider_activities = _count(conn, "SELECT COUNT(*) FROM activities")
+    total_daily_recovery = _count(conn, "SELECT COUNT(*) FROM daily_recovery")
 
     row = conn.execute(
         """
@@ -222,11 +224,15 @@ def collect_status(conn: sqlite3.Connection) -> dict:
     except json.JSONDecodeError:
         hr_zones = None
 
+    provider_status = store.get_provider_data_status(conn)
+
     return {
         "schema_version": store.get_schema_version(conn),
         "total_runs": total_runs,
         "detailed_runs": detailed_runs,
         "pending_details": pending_details,
+        "total_provider_activities": total_provider_activities,
+        "total_daily_recovery_records": total_daily_recovery,
         "first_run": row["first_run"] if row else None,
         "last_run": row["last_run"] if row else None,
         "last_sync_started_at": _meta(conn, "last_sync_started_at"),
@@ -243,6 +249,7 @@ def collect_status(conn: sqlite3.Connection) -> dict:
         "knowledge_dir_exists": os.path.isdir(config.KNOWLEDGE_DIR),
         "knowledge_db_exists": os.path.isdir(config.KNOWLEDGE_DB_PATH),
         "hr_zones": hr_zones,
+        "providers": provider_status,
     }
 
 
@@ -257,6 +264,7 @@ def format_status(conn: sqlite3.Connection) -> str:
         f"Last sync          : {status['last_sync_status']}  started={status['last_sync_started_at'] or 'n/a'}  completed={status['last_sync_completed_at'] or 'n/a'}",
         f"Sync watermark     : {status['sync_watermark_date'] or '2000-01-01'}",
         f"Last sync result   : {status['last_sync_new_runs']} new runs, {status['last_sync_detail_failures']} detail failures",
+        f"Provider data      : {status['total_provider_activities']} activities, {status['total_daily_recovery_records']} daily recovery records",
         f"Onboarding         : {'complete' if status['onboarding_completed'] else 'not completed'}",
         f"AE baseline        : {status['ae_baseline'] or 'not computed'}",
         f"Current VDOT       : {status['current_vdot'] or 'not estimated'}",
@@ -270,6 +278,12 @@ def format_status(conn: sqlite3.Connection) -> str:
         )
     if status["last_sync_error"]:
         lines.append(f"Last sync error    : {status['last_sync_error']}")
+    if status["providers"]:
+        connected = ", ".join(
+            f"{provider}={details['status']}"
+            for provider, details in sorted(status["providers"].items())
+        )
+        lines.append(f"Providers          : {connected}")
     return "\n".join(lines)
 
 

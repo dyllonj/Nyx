@@ -21,10 +21,12 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 import coach
+import config
 import evals
 import health
 from logging_utils import get_logger, log_event
 import onboarding
+from providers import get_provider, whoop_auth, whoop_fetch, whoop_normalize
 import store
 import sync_engine
 import training_plans
@@ -101,6 +103,36 @@ class SyncStartRequest(BaseModel):
     email: str | None = None
     password: str | None = None
     interactive: bool = False
+
+
+class WhoopConnectRequest(BaseModel):
+    redirect_uri: str = Field(min_length=1)
+    code: str | None = None
+    state: str | None = None
+    scopes: list[str] = Field(default_factory=list)
+
+
+class OuraConnectRequest(BaseModel):
+    redirect_uri: str | None = None
+    code: str | None = None
+    state: str | None = None
+    scopes: list[str] = Field(default_factory=list)
+
+
+class WhoopDisconnectRequest(BaseModel):
+    revoke_remote: bool = True
+
+
+class WhoopSyncRequest(BaseModel):
+    start: datetime.datetime | None = None
+    end: datetime.datetime | None = None
+    full_refresh: bool = False
+
+
+class OuraSyncRequest(BaseModel):
+    start_date: datetime.date | None = None
+    full_refresh: bool = False
+    include_heartrate: bool = False
 
 
 class TrainingPlanRequest(BaseModel):
@@ -297,6 +329,97 @@ def _local_data_meta(conn) -> dict:
         "sync_status": last_sync_status,
         "stale": stale,
     }
+
+
+def _default_provider_status(provider: str) -> dict:
+    return {
+        "provider": provider,
+        "status": "never_connected",
+        "external_user_id": None,
+        "email": None,
+        "display_name": None,
+        "connected_at": None,
+        "disconnected_at": None,
+        "token_expires_at": None,
+        "last_refreshed_at": None,
+        "activities": 0,
+        "daily_recovery_records": 0,
+        "sync": {},
+    }
+
+
+def _provider_status_payload(conn: sqlite3.Connection, provider: str) -> dict:
+    return store.get_provider_data_status(conn).get(provider, _default_provider_status(provider))
+
+
+def _oura_provider():
+    return get_provider("oura")
+
+
+def _coerce_utc_datetime(value: datetime.datetime) -> datetime.datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
+def _parse_iso_datetime(value: str | None) -> datetime.datetime | None:
+    if not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
+
+
+def _iso_utc(value: datetime.datetime) -> str:
+    return _coerce_utc_datetime(value).isoformat(timespec="seconds")
+
+
+def _provider_cursor_window_end(row: sqlite3.Row) -> datetime.datetime | None:
+    status = row["last_sync_status"] if isinstance(row, sqlite3.Row) else row.get("last_sync_status")
+    cursor = row["cursor"] if isinstance(row, sqlite3.Row) else row.get("cursor")
+    if status != "success" or not cursor:
+        return None
+    if isinstance(cursor, dict):
+        payload = cursor
+    else:
+        try:
+            payload = json.loads(cursor)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(payload, dict):
+            return None
+    return _parse_iso_datetime(payload.get("window_end"))
+
+
+def _resolve_whoop_sync_window(
+    conn: sqlite3.Connection,
+    request: WhoopSyncRequest,
+) -> tuple[str, str]:
+    end_dt = _coerce_utc_datetime(request.end) if request.end else datetime.datetime.now(datetime.timezone.utc)
+    if request.start is not None:
+        start_dt = _coerce_utc_datetime(request.start)
+    elif request.full_refresh:
+        start_dt = datetime.datetime(2000, 1, 1, tzinfo=datetime.timezone.utc)
+    else:
+        sync_states = store.list_provider_sync_states(conn, whoop_auth.PROVIDER)
+        window_ends = [value for value in (_provider_cursor_window_end(row) for row in sync_states) if value is not None]
+        if window_ends:
+            start_dt = max(window_ends) - datetime.timedelta(days=config.SYNC_LOOKBACK_DAYS)
+        else:
+            start_dt = datetime.datetime(2000, 1, 1, tzinfo=datetime.timezone.utc)
+
+    if end_dt < start_dt:
+        raise HarnessError(
+            "invalid_sync_window",
+            "WHOOP sync end time must be greater than or equal to the start time.",
+        )
+
+    return _iso_utc(start_dt), _iso_utc(end_dt)
 
 
 def _recent_load(runs, days: int = 42) -> tuple[int, float]:
@@ -942,6 +1065,136 @@ def _require_sync_job(conn: sqlite3.Connection, job_id: str) -> dict:
     return job
 
 
+def _whoop_sync_cursor(start: str, end: str, record_count: int) -> dict:
+    return {
+        "window_start": start,
+        "window_end": end,
+        "records_synced": record_count,
+    }
+
+
+def _sync_whoop(
+    conn: sqlite3.Connection,
+    *,
+    log: Callable[[str], None],
+    start: str,
+    end: str,
+    full_refresh: bool,
+) -> dict:
+    provider = whoop_auth.PROVIDER
+    account = whoop_auth.get_connected_account(conn)
+    external_user_id = account["external_user_id"]
+    client = whoop_fetch.WhoopApiClient(conn=conn)
+
+    log(f"Syncing WHOOP from {start} to {end}.")
+
+    store.mark_provider_sync_started(conn, provider, "workout")
+    try:
+        workouts = client.list_workouts(start=start, end=end)
+        for workout in workouts:
+            store.upsert_provider_raw_payload(
+                conn,
+                provider=provider,
+                resource="workout",
+                source_id=str(workout["id"]),
+                payload=workout,
+                source_updated_at=workout.get("updated_at"),
+            )
+            activity, samples = whoop_normalize.normalize_workout(workout)
+            activity["external_user_id"] = activity["external_user_id"] or external_user_id
+            store.upsert_activity(conn, activity)
+            store.replace_activity_samples(
+                conn,
+                provider=provider,
+                activity_source_id=activity["source_id"],
+                samples=samples,
+            )
+    except Exception as exc:
+        store.mark_provider_sync_failed(conn, provider, "workout", str(exc))
+        raise
+    else:
+        store.mark_provider_sync_completed(
+            conn,
+            provider,
+            "workout",
+            cursor=_whoop_sync_cursor(start, end, len(workouts)),
+        )
+        log(f"Fetched {len(workouts)} WHOOP workouts.")
+
+    daily_resources = {
+        "cycle": client.list_cycles,
+        "sleep": client.list_sleeps,
+        "recovery": client.list_recoveries,
+    }
+    fetched: dict[str, list[dict]] = {}
+    daily_started: list[str] = []
+    for resource, fetcher in daily_resources.items():
+        store.mark_provider_sync_started(conn, provider, resource)
+        daily_started.append(resource)
+        try:
+            records = fetcher(start=start, end=end)
+            fetched[resource] = records
+            for record in records:
+                source_id = str(
+                    record.get("id")
+                    or record.get("cycle_id")
+                    or record.get("sleep_id")
+                    or record.get("user_id")
+                )
+                store.upsert_provider_raw_payload(
+                    conn,
+                    provider=provider,
+                    resource=resource,
+                    source_id=source_id,
+                    payload=record,
+                    source_updated_at=record.get("updated_at"),
+                )
+        except Exception as exc:
+            for started_resource in daily_started:
+                store.mark_provider_sync_failed(conn, provider, started_resource, str(exc))
+            raise
+
+    try:
+        normalized = whoop_normalize.normalize_sync_bundle(
+            cycles=fetched.get("cycle", []),
+            sleeps=fetched.get("sleep", []),
+            recoveries=fetched.get("recovery", []),
+            workouts=workouts,
+        )
+        for row in normalized["daily_recovery"]:
+            row["external_user_id"] = row["external_user_id"] or external_user_id
+            store.upsert_daily_recovery(conn, row)
+    except Exception as exc:
+        for resource in daily_started:
+            store.mark_provider_sync_failed(conn, provider, resource, str(exc))
+        raise
+
+    for resource in daily_resources:
+        store.mark_provider_sync_completed(
+            conn,
+            provider,
+            resource,
+            cursor=_whoop_sync_cursor(start, end, len(fetched.get(resource, []))),
+        )
+
+    summary = {
+        "provider": provider,
+        "window_start": start,
+        "window_end": end,
+        "full_refresh": full_refresh,
+        "activities_upserted": len(workouts),
+        "cycles_fetched": len(fetched.get("cycle", [])),
+        "sleeps_fetched": len(fetched.get("sleep", [])),
+        "recoveries_fetched": len(fetched.get("recovery", [])),
+        "daily_recovery_upserted": len(normalized["daily_recovery"]),
+    }
+    log(
+        "WHOOP sync complete: "
+        f"{summary['activities_upserted']} workouts and {summary['daily_recovery_upserted']} recovery days stored."
+    )
+    return summary
+
+
 def _run_sync_job(job_id: str, email: str | None, password: str | None, interactive: bool) -> None:
     def log(message: str) -> None:
         _with_db(lambda conn: store.append_sync_job_log(conn, job_id, message))
@@ -997,6 +1250,71 @@ def _run_sync_job(job_id: str, email: str | None, password: str | None, interact
             logger,
             logging.ERROR,
             "sync.job.failed",
+            job_id=job_id,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+
+
+def _run_whoop_sync_job(job_id: str, start: str, end: str, full_refresh: bool) -> None:
+    def log(message: str) -> None:
+        _with_db(lambda conn: store.append_sync_job_log(conn, job_id, message))
+
+    try:
+        log_event(
+            logger,
+            logging.INFO,
+            "whoop.sync.job.started",
+            job_id=job_id,
+            start=start,
+            end=end,
+            full_refresh=full_refresh,
+        )
+        _with_db(lambda conn: store.mark_sync_job_running(conn, job_id))
+        summary = _with_db(
+            lambda conn: _sync_whoop(
+                conn,
+                log=log,
+                start=start,
+                end=end,
+                full_refresh=full_refresh,
+            )
+        )
+        _with_db(lambda conn: store.complete_sync_job(conn, job_id, summary))
+        log_event(
+            logger,
+            logging.INFO,
+            "whoop.sync.job.completed",
+            job_id=job_id,
+            **summary,
+        )
+    except HarnessError as exc:
+        _with_db(lambda conn: store.fail_sync_job(conn, job_id, _error_payload(exc)))
+        log_event(
+            logger,
+            logging.ERROR,
+            "whoop.sync.job.failed",
+            job_id=job_id,
+            code=exc.code,
+            message=exc.message,
+        )
+    except Exception as exc:
+        _with_db(
+            lambda conn: store.fail_sync_job(
+                conn,
+                job_id,
+                {
+                    "code": "sync_failed",
+                    "message": str(exc),
+                    "hint": "",
+                    "details": "",
+                },
+            )
+        )
+        log_event(
+            logger,
+            logging.ERROR,
+            "whoop.sync.job.failed",
             job_id=job_id,
             error=str(exc),
             error_type=type(exc).__name__,
@@ -1382,6 +1700,230 @@ async def start_sync(request: SyncStartRequest):
     thread = threading.Thread(
         target=_run_sync_job,
         args=(job_id, request.email, request.password, request.interactive),
+        daemon=True,
+    )
+    thread.start()
+    return job
+
+
+@app.post("/api/providers/oura/connect")
+async def connect_oura(request: OuraConnectRequest):
+    payload = await _run_blocking_async(
+        lambda: _oura_provider().authenticate(
+            {
+                "redirect_uri": request.redirect_uri,
+                "code": request.code,
+                "state": request.state,
+                "scopes": request.scopes,
+            }
+        )
+    )
+    if payload.get("mode") == "authorize":
+        return {
+            "provider": "oura",
+            "status": "authorization_required",
+            "authorization_url": payload["authorization_url"],
+            "state": payload["state"],
+            "scopes": payload["scopes"],
+        }
+
+    account = await _run_db_async(lambda conn: _provider_status_payload(conn, "oura"))
+    return {
+        "provider": "oura",
+        "status": "connected",
+        "account": account,
+        "scopes": payload.get("scopes") or [],
+    }
+
+
+@app.post("/api/providers/oura/disconnect")
+async def disconnect_oura():
+    account = await _run_db_async(lambda conn: store.get_provider_account(conn, "oura"))
+    if account is None or account["status"] != "connected":
+        raise HarnessError(
+            "oura_not_connected",
+            "Oura is not connected.",
+            hint="Connect Oura before disconnecting it.",
+        )
+
+    await _run_blocking_async(lambda: _oura_provider().disconnect())
+    payload = await _run_db_async(lambda conn: _provider_status_payload(conn, "oura"))
+    return {
+        "provider": "oura",
+        "status": "disconnected",
+        "account": payload,
+    }
+
+
+@app.post("/api/providers/oura/sync")
+async def sync_oura(request: OuraSyncRequest):
+    account = await _run_db_async(lambda conn: store.get_provider_account(conn, "oura"))
+    if account is None or account["status"] != "connected":
+        raise HarnessError(
+            "oura_not_connected",
+            "Oura is not connected.",
+            hint="Connect Oura before syncing it.",
+        )
+
+    summary = await _run_blocking_async(
+        lambda: _oura_provider().sync(
+            start_date=request.start_date.isoformat() if request.start_date else None,
+            full_refresh=request.full_refresh,
+            include_heartrate=request.include_heartrate,
+        )
+    )
+    summary["account"] = await _run_db_async(lambda conn: _provider_status_payload(conn, "oura"))
+    return summary
+
+
+@app.post("/api/providers/whoop/connect")
+async def connect_whoop(request: WhoopConnectRequest):
+    scopes = request.scopes or list(whoop_auth.DEFAULT_SCOPES)
+    if not request.code:
+        state = whoop_auth.generate_oauth_state()
+        await _run_db_async(lambda conn: store.set_provider_oauth_state(conn, whoop_auth.PROVIDER, state))
+        return {
+            "provider": whoop_auth.PROVIDER,
+            "status": "authorization_required",
+            "authorization_url": whoop_auth.build_authorization_url(
+                request.redirect_uri,
+                state=state,
+                scopes=scopes,
+            ),
+            "state": state,
+            "scopes": scopes,
+        }
+
+    expected_state = await _run_db_async(
+        lambda conn: store.get_provider_oauth_state(conn, whoop_auth.PROVIDER)
+    )
+    if expected_state and request.state != expected_state:
+        raise HarnessError(
+            "whoop_oauth_state_invalid",
+            "WHOOP OAuth state did not match the pending authorization request.",
+            hint="Restart the WHOOP connect flow and use the returned state value.",
+        )
+
+    token_payload = await _run_blocking_async(
+        lambda: whoop_auth.exchange_code_for_tokens(request.code or "", request.redirect_uri)
+    )
+    client = whoop_fetch.WhoopApiClient(access_token=str(token_payload["access_token"]))
+    profile = await _run_blocking_async(client.get_basic_profile)
+    warnings: list[dict] = []
+    try:
+        body_measurements = await _run_blocking_async(client.get_body_measurements)
+    except HarnessError as exc:
+        body_measurements = None
+        warnings.append(_error_payload(exc))
+
+    normalized = whoop_normalize.normalize_profile(profile, body_measurements)
+
+    def persist(conn: sqlite3.Connection) -> dict:
+        store.connect_provider_account(
+            conn,
+            provider=whoop_auth.PROVIDER,
+            external_user_id=normalized["external_user_id"],
+            email=normalized["email"],
+            display_name=normalized["display_name"],
+            access_token=str(token_payload["access_token"]),
+            refresh_token=(
+                str(token_payload["refresh_token"])
+                if token_payload.get("refresh_token") is not None
+                else None
+            ),
+            token_type=str(token_payload.get("token_type") or "bearer"),
+            scopes=list(token_payload.get("scope_list") or scopes),
+            token_expires_at=token_payload.get("token_expires_at"),
+            refresh_token_expires_at=None,
+            profile=normalized["profile"],
+        )
+        store.clear_provider_oauth_state(conn, whoop_auth.PROVIDER)
+        store.upsert_provider_raw_payload(
+            conn,
+            provider=whoop_auth.PROVIDER,
+            resource="profile",
+            source_id=normalized["external_user_id"] or "me",
+            payload=profile,
+            source_updated_at=None,
+        )
+        if body_measurements is not None:
+            store.upsert_provider_raw_payload(
+                conn,
+                provider=whoop_auth.PROVIDER,
+                resource="body_measurement",
+                source_id=normalized["external_user_id"] or "me",
+                payload=body_measurements,
+                source_updated_at=None,
+            )
+        return _provider_status_payload(conn, whoop_auth.PROVIDER)
+
+    account = await _run_db_async(persist)
+    return {
+        "provider": whoop_auth.PROVIDER,
+        "status": "connected",
+        "account": account,
+        "scopes": token_payload.get("scope_list") or scopes,
+        "warnings": warnings,
+    }
+
+
+@app.post("/api/providers/whoop/disconnect")
+async def disconnect_whoop(request: WhoopDisconnectRequest):
+    account = await _run_db_async(lambda conn: store.get_provider_account(conn, whoop_auth.PROVIDER))
+    if account is None or account["status"] != "connected":
+        raise HarnessError(
+            "whoop_not_connected",
+            "WHOOP is not connected.",
+            hint="Connect WHOOP before disconnecting it.",
+        )
+
+    warning = None
+    if request.revoke_remote:
+        try:
+            access_token = await _run_blocking_async(
+                lambda: _with_db(lambda conn: whoop_auth.ensure_fresh_access_token(conn))
+            )
+            await _run_blocking_async(lambda: whoop_auth.revoke_remote_access(access_token))
+        except HarnessError as exc:
+            warning = _error_payload(exc)
+
+    def persist(conn: sqlite3.Connection) -> dict:
+        store.disconnect_provider_account(conn, whoop_auth.PROVIDER)
+        store.clear_provider_oauth_state(conn, whoop_auth.PROVIDER)
+        return _provider_status_payload(conn, whoop_auth.PROVIDER)
+
+    payload = await _run_db_async(persist)
+    return {
+        "provider": whoop_auth.PROVIDER,
+        "status": "disconnected",
+        "account": payload,
+        "warning": warning,
+    }
+
+
+@app.post("/api/providers/whoop/sync")
+async def sync_whoop(request: WhoopSyncRequest):
+    await _run_db_async(lambda conn: whoop_auth.get_connected_account(conn))
+    start, end = await _run_db_async(lambda conn: _resolve_whoop_sync_window(conn, request))
+    job_id = uuid.uuid4().hex
+
+    def create(conn: sqlite3.Connection) -> dict:
+        store.create_sync_job(conn, job_id)
+        return _require_sync_job(conn, job_id)
+
+    job = await _run_db_async(create)
+    log_event(
+        logger,
+        logging.INFO,
+        "whoop.sync.job.queued",
+        job_id=job_id,
+        start=start,
+        end=end,
+        full_refresh=request.full_refresh,
+    )
+    thread = threading.Thread(
+        target=_run_whoop_sync_job,
+        args=(job_id, start, end, request.full_refresh),
         daemon=True,
     )
     thread.start()

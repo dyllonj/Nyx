@@ -43,6 +43,12 @@ The FastAPI server (`server.py`) exposes:
 | `/api/coach/context` | GET | Compact context for coach UI strip |
 | `/api/sync` | POST | Start background sync job |
 | `/api/sync/{job_id}` | GET | Poll sync job progress |
+| `/api/providers/oura/connect` | POST | Start or complete the Oura OAuth flow |
+| `/api/providers/oura/disconnect` | POST | Disconnect the stored Oura account |
+| `/api/providers/oura/sync` | POST | Pull Oura workouts and daily recovery data into canonical tables |
+| `/api/providers/whoop/connect` | POST | Start or complete the WHOOP OAuth flow |
+| `/api/providers/whoop/disconnect` | POST | Disconnect the stored WHOOP account |
+| `/api/providers/whoop/sync` | POST | Start a WHOOP sync job |
 | `/api/vdot/recalc` | POST | Force VDOT and HR zone refresh |
 | `/api/training-plan` | POST | Generate a structured training plan from local data |
 | `/api/coach/message` | POST | Send message to coach, get structured response |
@@ -153,6 +159,13 @@ Optional API auth:
 ```bash
 export NYX_API_TOKEN=replace-me
 export EXPO_PUBLIC_API_TOKEN=replace-me
+```
+
+Optional Oura provider auth:
+
+```bash
+export OURA_CLIENT_ID=replace-me
+export OURA_CLIENT_SECRET=replace-me
 ```
 
 If `NYX_API_TOKEN` is set, Nyx requires `Authorization: Bearer <token>` on `/api/*` requests. CORS is restricted to localhost by default, plus Tailscale/LAN-style origins via regex. Override explicit origins with `NYX_CORS_ORIGINS=origin1,origin2`.
