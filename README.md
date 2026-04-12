@@ -17,6 +17,7 @@ Nyx has two layers:
 - **Expo web client** — React Native + React Native Web app in `apps/nyx-client/`. Talks to the backend over `http://127.0.0.1:8000`. Four screens: Home, Athlete, Coach, Diagnostics, plus a run detail page.
 
 The design spec is in [docs/web-app-build-spec.md](docs/web-app-build-spec.md).
+Provider expansion research (Oura + Apple Health) is in [docs/provider-expansion-research.md](docs/provider-expansion-research.md).
 
 ### Frontend stack
 
