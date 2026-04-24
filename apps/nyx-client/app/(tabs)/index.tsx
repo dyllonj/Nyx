@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import {
 
 import { AppFrame } from "@/components/AppFrame";
 import { MetricPill } from "@/components/MetricPill";
+import { OnboardingPromptModal } from "@/components/OnboardingPromptModal";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SignalRow } from "@/components/SignalRow";
 import { Surface } from "@/components/Surface";
@@ -18,16 +20,31 @@ import { api } from "@/lib/api/client";
 import { theme } from "@/lib/theme/tokens";
 import { convertPaceStr, fmtMi, fmtPaceMi } from "@/lib/units";
 
+type OnboardingState = {
+  completed: boolean;
+  current_step: number;
+  steps: Array<{ key: string; text: string }>;
+};
+
+const WEB_ONBOARDING_PROMPT_KEY = "nyx:onboarding-prompt-dismissed";
+
 export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [syncJobId, setSyncJobId] = useState<string | null>(null);
   const [syncJob, setSyncJob] = useState<any>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [showOnboardingPrompt, setShowOnboardingPrompt] = useState(false);
 
   const summaryQuery = useQuery({
     queryKey: ["athlete-summary"],
     queryFn: api.getAthleteSummary,
+  });
+  const onboardingQuery = useQuery<OnboardingState>({
+    queryKey: ["onboarding"],
+    queryFn: api.getOnboarding,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
   const doctorQuery = useQuery({
     queryKey: ["doctor"],
@@ -65,6 +82,30 @@ export default function HomeScreen() {
 
     return () => clearInterval(interval);
   }, [queryClient, syncJobId]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") {
+      return;
+    }
+
+    const onboarding = onboardingQuery.data;
+    if (!onboarding) {
+      return;
+    }
+
+    if (onboarding.completed) {
+      clearOnboardingPromptDismissal();
+      setShowOnboardingPrompt(false);
+      return;
+    }
+
+    if (readOnboardingPromptDismissal()) {
+      setShowOnboardingPrompt(false);
+      return;
+    }
+
+    setShowOnboardingPrompt(true);
+  }, [onboardingQuery.data]);
 
   const athlete = summaryQuery.data;
   const recentRuns = runsQuery.data?.runs ?? [];
@@ -107,129 +148,149 @@ export default function HomeScreen() {
     router.push("/coach" as any);
   }
 
+  function handleStartOnboardingFromPrompt() {
+    persistOnboardingPromptDismissal();
+    setShowOnboardingPrompt(false);
+    router.push("/onboarding" as any);
+  }
+
+  function handleDismissOnboardingPrompt() {
+    persistOnboardingPromptDismissal();
+    setShowOnboardingPrompt(false);
+  }
+
   return (
-    <AppFrame
-      title="Home"
-      subtitle="A calm control surface for sync state, current fitness, and the next move."
-      actionLabel={actionLabel}
-      onActionPress={handlePrimaryAction}
-    >
-      <Surface>
-        <SectionHeader
-          eyebrow="Nyx"
-          title="Local-first running intelligence"
-          subtitle={athlete?.next_action?.reason ?? "Load athlete state, sync Garmin, and ground coaching in current data."}
-        />
-        <View style={styles.heroMetrics}>
-          <MetricPill label="sync" value={athlete?.last_sync_status ?? "unknown"} />
-          <MetricPill label="data" value={athlete?.meta?.cached ? "local cache" : "live"} />
-          <MetricPill label="vdot" value={athlete?.vdot?.value ? String(athlete.vdot.value) : "not set"} />
-          <MetricPill
-            label="z2"
-            value={
-              athlete?.zone_2 ? `${athlete.zone_2.hr_low}-${athlete.zone_2.hr_high} bpm` : "not set"
-            }
+    <>
+      <AppFrame
+        title="Home"
+        subtitle="A calm control surface for sync state, current fitness, and the next move."
+        actionLabel={actionLabel}
+        onActionPress={handlePrimaryAction}
+      >
+        <Surface>
+          <SectionHeader
+            eyebrow="Nyx"
+            title="Local-first running intelligence"
+            subtitle={athlete?.next_action?.reason ?? "Load athlete state, sync Garmin, and ground coaching in current data."}
           />
-        </View>
-        <Text style={styles.heroLead}>
-          {athlete?.vdot?.easy_pace
-            ? `Easy pace ${convertPaceStr(athlete.vdot.easy_pace)}/mi`
-            : "Sync data and refresh metrics to unlock current training paces."}
-        </Text>
-        <Text style={styles.cacheMeta}>
-          {athlete?.meta?.last_sync
-            ? `Using cached local data • last sync ${athlete.meta.last_sync}`
-            : "Using cached local data • no successful sync yet"}
-        </Text>
-        {syncJob?.status === "running" || syncJob?.status === "queued" ? (
-          <View style={styles.inlineStatus}>
-            <ActivityIndicator color={theme.colors.textPrimary} />
-            <Text style={styles.inlineStatusText}>Syncing Garmin activity history...</Text>
+          <View style={styles.heroMetrics}>
+            <MetricPill label="sync" value={athlete?.last_sync_status ?? "unknown"} />
+            <MetricPill label="data" value={athlete?.meta?.cached ? "local cache" : "live"} />
+            <MetricPill label="vdot" value={athlete?.vdot?.value ? String(athlete.vdot.value) : "not set"} />
+            <MetricPill
+              label="z2"
+              value={
+                athlete?.zone_2 ? `${athlete.zone_2.hr_low}-${athlete.zone_2.hr_high} bpm` : "not set"
+              }
+            />
           </View>
-        ) : null}
-        {syncJob?.logs?.length ? (
-          <Text style={styles.syncLog}>{syncJob.logs[syncJob.logs.length - 1]}</Text>
-        ) : null}
-        {syncError ? <Text style={styles.errorText}>{syncError}</Text> : null}
-      </Surface>
-
-      <Surface>
-        <SectionHeader
-          eyebrow="Coach status"
-          title="Is Nyx helping right now?"
-          subtitle="Progress, guidance quality, and safety stay separate so this screen does not fake precision."
-        />
-        <View style={styles.signalStack}>
-          <SignalRow
-            label="Progress"
-            status={athlete?.coach_status?.progress?.status ?? "unknown"}
-            summary={athlete?.coach_status?.progress?.summary ?? "Need more data to read direction of travel."}
-          />
-          <SignalRow
-            label="Quality"
-            status={athlete?.coach_status?.quality?.status ?? "unknown"}
-            summary={athlete?.coach_status?.quality?.summary ?? "No coach feedback has been captured yet."}
-          />
-          <SignalRow
-            label="Safety"
-            status={athlete?.coach_status?.safety?.status ?? "unknown"}
-            summary={athlete?.coach_status?.safety?.summary ?? "Safety checks need more recent data."}
-          />
-        </View>
-        <Text style={styles.nextMove}>
-          Next move: {athlete?.coach_status?.next_action?.reason ?? "Open Coach and pressure-test the next training decision."}
-        </Text>
-      </Surface>
-
-      <View style={styles.twoColumn}>
-        <Surface>
-          <Text style={styles.kicker}>Current state</Text>
-          <Text style={styles.statValue}>
-            {athlete ? `${athlete.recent_42d_runs} runs / ${fmtMi(athlete.recent_42d_distance_km)}` : "Loading"}
+          <Text style={styles.heroLead}>
+            {athlete?.vdot?.easy_pace
+              ? `Easy pace ${convertPaceStr(athlete.vdot.easy_pace)}/mi`
+              : "Sync data and refresh metrics to unlock current training paces."}
           </Text>
-          <Text style={styles.statHint}>Recent 42-day load</Text>
-          <View style={styles.rule} />
-          <Text style={styles.statValue}>
-            {doctorCounts ? `${doctorCounts.pass} pass / ${doctorCounts.warn} warn / ${doctorCounts.fail} fail` : "Loading"}
+          <Text style={styles.cacheMeta}>
+            {athlete?.meta?.last_sync
+              ? `Using cached local data • last sync ${athlete.meta.last_sync}`
+              : "Using cached local data • no successful sync yet"}
           </Text>
-          <Text style={styles.statHint}>Harness readiness</Text>
+          {syncJob?.status === "running" || syncJob?.status === "queued" ? (
+            <View style={styles.inlineStatus}>
+              <ActivityIndicator color={theme.colors.textPrimary} />
+              <Text style={styles.inlineStatusText}>Syncing Garmin activity history...</Text>
+            </View>
+          ) : null}
+          {syncJob?.logs?.length ? (
+            <Text style={styles.syncLog}>{syncJob.logs[syncJob.logs.length - 1]}</Text>
+          ) : null}
+          {syncError ? <Text style={styles.errorText}>{syncError}</Text> : null}
         </Surface>
 
         <Surface>
-          <Text style={styles.kicker}>Current fitness</Text>
-          <Text style={styles.statValue}>{athlete?.vdot?.threshold_pace ? `${convertPaceStr(athlete.vdot.threshold_pace)}/mi` : "n/a"}</Text>
-          <Text style={styles.statHint}>Threshold pace</Text>
-          <View style={styles.rule} />
-          <Text style={styles.statValue}>
-            {athlete?.rei_trend?.recent_avg ? String(athlete.rei_trend.recent_avg) : "n/a"}
+          <SectionHeader
+            eyebrow="Coach status"
+            title="Is Nyx helping right now?"
+            subtitle="Progress, guidance quality, and safety stay separate so this screen does not fake precision."
+          />
+          <View style={styles.signalStack}>
+            <SignalRow
+              label="Progress"
+              status={athlete?.coach_status?.progress?.status ?? "unknown"}
+              summary={athlete?.coach_status?.progress?.summary ?? "Need more data to read direction of travel."}
+            />
+            <SignalRow
+              label="Quality"
+              status={athlete?.coach_status?.quality?.status ?? "unknown"}
+              summary={athlete?.coach_status?.quality?.summary ?? "No coach feedback has been captured yet."}
+            />
+            <SignalRow
+              label="Safety"
+              status={athlete?.coach_status?.safety?.status ?? "unknown"}
+              summary={athlete?.coach_status?.safety?.summary ?? "Safety checks need more recent data."}
+            />
+          </View>
+          <Text style={styles.nextMove}>
+            Next move: {athlete?.coach_status?.next_action?.reason ?? "Open Coach and pressure-test the next training decision."}
           </Text>
-          <Text style={styles.statHint}>Recent REI average</Text>
         </Surface>
-      </View>
 
-      <Surface>
-        <SectionHeader
-          eyebrow="Recent runs"
-          title="The last three sessions"
-          subtitle="This is what Nyx will lean on first when reasoning about what changed."
-        />
-        <View style={styles.runList}>
-          {recentRuns.map((run: any) => (
-            <Pressable
-              key={run.activity_id}
-              onPress={() => router.push(`/run/${run.activity_id}` as any)}
-              style={({ pressed }) => [styles.runRow, pressed && styles.runRowPressed]}
-            >
-              <Text style={styles.runDate}>{run.start_time.slice(0, 10)}</Text>
-              <Text style={styles.runMain}>{fmtMi(run.distance_km)}</Text>
-              <Text style={styles.runMetric}>{run.pace_min_per_km ? fmtPaceMi(run.pace_min_per_km) : "n/a"}</Text>
-              <Text style={styles.runMetric}>{run.avg_hr ? `${Math.round(run.avg_hr)} bpm` : "n/a"}</Text>
-              <Text style={styles.runMetric}>{run.rei ? `REI ${run.rei.toFixed(0)}` : "REI n/a"}</Text>
-            </Pressable>
-          ))}
+        <View style={styles.twoColumn}>
+          <Surface>
+            <Text style={styles.kicker}>Current state</Text>
+            <Text style={styles.statValue}>
+              {athlete ? `${athlete.recent_42d_runs} runs / ${fmtMi(athlete.recent_42d_distance_km)}` : "Loading"}
+            </Text>
+            <Text style={styles.statHint}>Recent 42-day load</Text>
+            <View style={styles.rule} />
+            <Text style={styles.statValue}>
+              {doctorCounts ? `${doctorCounts.pass} pass / ${doctorCounts.warn} warn / ${doctorCounts.fail} fail` : "Loading"}
+            </Text>
+            <Text style={styles.statHint}>Harness readiness</Text>
+          </Surface>
+
+          <Surface>
+            <Text style={styles.kicker}>Current fitness</Text>
+            <Text style={styles.statValue}>{athlete?.vdot?.threshold_pace ? `${convertPaceStr(athlete.vdot.threshold_pace)}/mi` : "n/a"}</Text>
+            <Text style={styles.statHint}>Threshold pace</Text>
+            <View style={styles.rule} />
+            <Text style={styles.statValue}>
+              {athlete?.rei_trend?.recent_avg ? String(athlete.rei_trend.recent_avg) : "n/a"}
+            </Text>
+            <Text style={styles.statHint}>Recent REI average</Text>
+          </Surface>
         </View>
-      </Surface>
-    </AppFrame>
+
+        <Surface>
+          <SectionHeader
+            eyebrow="Recent runs"
+            title="The last three sessions"
+            subtitle="This is what Nyx will lean on first when reasoning about what changed."
+          />
+          <View style={styles.runList}>
+            {recentRuns.map((run: any) => (
+              <Pressable
+                key={run.activity_id}
+                onPress={() => router.push(`/run/${run.activity_id}` as any)}
+                style={({ pressed }) => [styles.runRow, pressed && styles.runRowPressed]}
+              >
+                <Text style={styles.runDate}>{run.start_time.slice(0, 10)}</Text>
+                <Text style={styles.runMain}>{fmtMi(run.distance_km)}</Text>
+                <Text style={styles.runMetric}>{run.pace_min_per_km ? fmtPaceMi(run.pace_min_per_km) : "n/a"}</Text>
+                <Text style={styles.runMetric}>{run.avg_hr ? `${Math.round(run.avg_hr)} bpm` : "n/a"}</Text>
+                <Text style={styles.runMetric}>{run.rei ? `REI ${run.rei.toFixed(0)}` : "REI n/a"}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Surface>
+      </AppFrame>
+      <OnboardingPromptModal
+        currentStep={onboardingQuery.data?.current_step ?? 0}
+        onDismiss={handleDismissOnboardingPrompt}
+        onStartPress={handleStartOnboardingFromPrompt}
+        stepCount={onboardingQuery.data?.steps?.length ?? 0}
+        visible={showOnboardingPrompt}
+      />
+    </>
   );
 }
 
@@ -237,6 +298,42 @@ async function apiRequestRefresh(queryClient: ReturnType<typeof useQueryClient>)
   await api.recalcMetrics();
   queryClient.invalidateQueries({ queryKey: ["athlete-summary"] });
   queryClient.invalidateQueries({ queryKey: ["doctor"] });
+}
+
+function readOnboardingPromptDismissal() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return window.sessionStorage.getItem(WEB_ONBOARDING_PROMPT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistOnboardingPromptDismissal() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(WEB_ONBOARDING_PROMPT_KEY, "1");
+  } catch {
+    // Ignore storage failures and keep the prompt behavior functional.
+  }
+}
+
+function clearOnboardingPromptDismissal() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(WEB_ONBOARDING_PROMPT_KEY);
+  } catch {
+    // Ignore storage failures and keep the prompt behavior functional.
+  }
 }
 
 const styles = StyleSheet.create({
